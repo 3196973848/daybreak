@@ -14,7 +14,9 @@ class Goal(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    plan: Mapped["Plan"] = relationship(back_populates="goal", uselist=False)
+    plan: Mapped["Plan"] = relationship(
+        back_populates="goal", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class Plan(Base):
