@@ -14,6 +14,7 @@ export function GoalInput() {
   const [durationUnit, setDurationUnit] = useState<DurationUnit>('day')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [durationError, setDurationError] = useState('')
   const [goals, setGoals] = useState<GoalDTO[]>([])
 
   const loadGoals = () => api.listGoals().then(setGoals).catch(() => setGoals([]))
@@ -24,9 +25,10 @@ export function GoalInput() {
     if (!title.trim()) return
     const parsedDuration = Number(durationValue)
     if (!Number.isInteger(parsedDuration) || parsedDuration <= 0) {
-      setError('预期完成时间必须是正整数')
+      setDurationError('预期完成时间必须是正整数')
       return
     }
+    setDurationError('')
     setLoading(true)
     setError('')
     try {
@@ -81,7 +83,12 @@ export function GoalInput() {
               step={1}
               required
               value={durationValue}
-              onChange={(e) => setDurationValue(e.target.value)}
+              aria-invalid={durationError ? true : undefined}
+              aria-describedby={durationError ? 'duration-error' : undefined}
+              onChange={(e) => {
+                setDurationValue(e.target.value)
+                setDurationError('')
+              }}
             />
             <label className="sr-only" htmlFor="duration-unit">时间单位</label>
             <select
@@ -98,6 +105,11 @@ export function GoalInput() {
           <p className="faint" style={{ fontSize: 12, margin: '6px 0 0' }}>
             任务会从今天起（包含周末）均匀安排在这段时间内。
           </p>
+          {durationError && (
+            <p id="duration-error" role="alert" className="error-text" style={{ marginTop: 12 }}>
+              {durationError}
+            </p>
+          )}
           {error && <p className="error-text" style={{ marginTop: 12 }}>{error}</p>}
           <button className="btn" disabled={loading} style={{ marginTop: 20, width: '100%' }}>
             {loading ? 'AI 正在拆解计划…' : '生成计划'}

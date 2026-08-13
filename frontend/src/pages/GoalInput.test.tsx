@@ -56,15 +56,27 @@ describe('GoalInput duration scheduling', () => {
     })
   })
 
-  it('does not submit a non-positive duration', async () => {
+  it.each([
+    ['an empty value', '', ''],
+    ['zero', '0', '0'],
+    ['a negative value', '-1', '-1'],
+    ['a fractional value', '1.5', '1.5'],
+    ['invalid text cleaned by the number input', 'invalid', ''],
+  ])('rejects %s and exposes an accessible error', async (_case, enteredValue, browserValue) => {
     const user = userEvent.setup()
     render(<MemoryRouter><GoalInput /></MemoryRouter>)
 
     await user.type(screen.getByLabelText('目标标题 *'), '学习 Python')
-    fireEvent.change(screen.getByLabelText('预期完成时间'), { target: { value: '0' } })
+    const duration = screen.getByLabelText('预期完成时间') as HTMLInputElement
+    fireEvent.change(duration, { target: { value: enteredValue } })
+    expect(duration.value).toBe(browserValue)
     await user.click(screen.getByRole('button', { name: '生成计划' }))
 
-    expect(await screen.findByText('预期完成时间必须是正整数')).toBeTruthy()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('预期完成时间必须是正整数')
+    expect(alert.id).toBe('duration-error')
+    expect(duration.getAttribute('aria-invalid')).toBe('true')
+    expect(duration.getAttribute('aria-describedby')).toBe('duration-error')
     expect(mockedApi.createGoal).not.toHaveBeenCalled()
   })
 })

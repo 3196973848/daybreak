@@ -201,7 +201,9 @@ button { cursor: pointer; font-family: inherit; }
   padding: 0;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 2px solid var(--text-faint);
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--text-faint);
   background: transparent;
   color: transparent;
   display: inline-flex;
