@@ -87,7 +87,7 @@ export function DailyTasks() {
                   onClick={() => void toggle(t)}
                   aria-label={t.status === 'done' ? '标记未完成' : '标记完成'}
                 >
-                  {t.status === 'done' && <IconCheck size={12} />}
+                  {t.status === 'done' && <IconCheck size={13} />}
                 </button>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
