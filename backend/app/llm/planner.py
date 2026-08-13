@@ -1,4 +1,7 @@
-import anthropic
+import json
+from typing import Any
+
+from openai import OpenAI
 
 from ..config import settings
 from .schema import PlanSpec
@@ -13,28 +16,45 @@ PLANNER_SYSTEM_PROMPT = """你是一个目标规划专家。用户给出一个�
 任务规则：
 - 每个 task 有 type，取值 learn(学习)/practice(实操)/project(项目)
 - effort_hours 为预估工时：学习 0.5-2，实操 1-4，项目 2-8
-- 描述用中文，具体可执行"""
+- 描述用中文，具体可执行
+- 只输出 JSON，不要输出任何其它文字或 markdown"""
+
+
+def _client(client: OpenAI | None) -> OpenAI:
+    if client is not None:
+        return client
+    return OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)
 
 
 def generate_plan(
     goal_title: str,
     description: str,
     target_date: str | None,
-    client: anthropic.Anthropic | None = None,
+    client: OpenAI | None = None,
 ) -> PlanSpec:
-    client = client or anthropic.Anthropic()
+    c = _client(client)
     user_prompt = f"目标：{goal_title}\n说明：{description or '无'}"
     if target_date:
         user_prompt += f"\n期望完成日期：{target_date}"
     user_prompt += "\n请生成完整计划。"
-    response = client.messages.parse(
-        model=settings.anthropic_model,
+    response = c.chat.completions.create(
+        model=settings.llm_model,
         max_tokens=16000,
-        thinking={"type": "adaptive"},
-        system=PLANNER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-        output_format=PlanSpec,
+        messages=[
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format={"type": "json_object"},
     )
-    if response.parsed_output is None:
-        raise RuntimeError("LLM 输出解析失败")
-    return response.parsed_output
+    text = response.choices[0].message.content
+    if not text:
+        raise RuntimeError("LLM 返回为空")
+    return parse_plan_spec(text)
+
+
+def parse_plan_spec(text: str) -> PlanSpec:
+    try:
+        data: Any = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("LLM 输出不是合法 JSON") from exc
+    return PlanSpec.model_validate(data)

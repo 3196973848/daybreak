@@ -1,8 +1,8 @@
 import json
-from typing import List
+from typing import Any, List
 
-import anthropic
-from pydantic import BaseModel
+from openai import OpenAI
+from pydantic import BaseModel, ValidationError
 
 from ..config import settings
 
@@ -28,31 +28,47 @@ class GradeResult(BaseModel):
 
 
 TEST_GENERATE_PROMPT = """你是学习测试出题助手。基于学习任务内容生成 2-3 道选择题和 1 道简答题。
-选择题必须含 4 个选项且仅一个正确；简答题 options 为空。只输出 JSON，不输出其它内容。"""
+选择题必须含 4 个选项且仅一个正确；简答题 options 为空。只输出 JSON，不输出其它内容。
+输出格式：{"questions": [{"id": 1, "type": "choice", "text": "...", "options": ["a","b","c","d"]}, {"id": 2, "type": "short", "text": "...", "options": []}]}"""
 
 GRADE_TEST_PROMPT = """你是严格但公平的评分老师。依据学习任务内容与题目，判断用户答案正确率。
-返回 JSON：{"score": 0-1(正确率), "feedback": "中文评语"}。"""
+只输出 JSON：{"score": 0-1(正确率), "feedback": "中文评语"}。"""
 
 DELIVER_GENERATE_PROMPT = """你是交付验收设计者。为实操/项目任务写 2-5 条明确、可检验的验收标准。
 只输出 JSON：{"acceptance_criteria": "标准文本"}。"""
 
 GRADE_DELIVER_PROMPT = """你是交付验收评审员。依据验收标准判断用户提交的成果描述是否达标。
-返回 JSON：{"score": 0-1(达标度), "feedback": "中文评审意见"}。score>=0.7 表示达标。"""
+只输出 JSON：{"score": 0-1(达标度), "feedback": "中文评审意见"}。score>=0.7 表示达标。"""
+
+
+def _client(client: OpenAI | None) -> OpenAI:
+    if client is not None:
+        return client
+    return OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)
 
 
 def _parse(client, system_prompt, user_prompt, output_model, max_tokens=4000):
-    client = client or anthropic.Anthropic()
-    response = client.messages.parse(
-        model=settings.anthropic_model,
+    c = _client(client)
+    response = c.chat.completions.create(
+        model=settings.llm_model,
         max_tokens=max_tokens,
-        thinking={"type": "adaptive"},
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-        output_format=output_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format={"type": "json_object"},
     )
-    if response.parsed_output is None:
-        raise RuntimeError("LLM 输出解析失败")
-    return response.parsed_output
+    text = response.choices[0].message.content
+    if not text:
+        raise RuntimeError("LLM 返回为空")
+    try:
+        data: Any = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("LLM 输出不是合法 JSON") from exc
+    try:
+        return output_model.model_validate(data)
+    except ValidationError as exc:
+        raise RuntimeError("LLM 输出不符合结构") from exc
 
 
 def generate_test(task_title: str, task_description: str, client=None) -> TestContent:

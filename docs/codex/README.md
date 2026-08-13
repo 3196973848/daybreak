@@ -17,10 +17,10 @@
 ## 全局约束(每个任务都遵守)
 
 - 数据模型按 spec §4:Goal → 1 Plan → N Milestone → N Task,另加 VerificationRecord
-- LLM 调用统一走 Anthropic Python SDK 的 `client.messages.parse(..., output_format=Model)`,模型 ID 用 `claude-opus-4-8`,`thinking={"type": "adaptive"}`
+- LLM 调用统一走 **DeepSeek(OpenAI 兼容接口)**:`OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)`,再 `chat.completions.create(model=settings.llm_model, messages=[...], response_format={"type": "json_object"})`,服务端 `json.loads` + Pydantic 校验。模型 `deepseek-v4pro`,base_url 默认 `https://api.deepseek.com`。不要用 Anthropic SDK
 - LLM 只输出"是什么",绝不输出具体日期;日期一律由 `schedule()` 算法产生
 - 检验通过阈值:测试/交付的 `score >= 0.7` 判通过(服务端计算,不依赖 LLM 返回 passed)
-- API key 走环境变量或 Anthropic SDK 的 OAuth profile(本项目已配置),不硬编码
+- API key 用环境变量 `DEEPSEEK_API_KEY`(config 经 `PLANAGENT_LLM_API_KEY` 读取),不硬编码
 - 所有后端路由前缀为 `/api`
 - 测试用 pytest;在 `backend/` 目录下运行 `python -m pytest`
 
@@ -37,6 +37,10 @@
 - `SSL_CERT_FILE` 环境变量若指向不存在的 `D:\conda\envs\dl2025/ssl/cacert.pem`,请 **unset 它**(或改用系统证书),否则 SDK 与 pip 的 HTTPS 会失败
 - 确认 `python --version` ≥ 3.10 可用,`pip` 正常
 - 后端依赖装进当前 Python 环境即可(用 `pip install -r backend/requirements.txt`)
+
+## 状态说明(重要)
+
+项目中途已决定把 LLM 从 Claude 切换到 **DeepSeek**(OpenAI 兼容接口)。Task 4(planner)与 Task 7(verifier)已由 Claude Code 用 DeepSeek 写法重写完成,且其测试已更新并通过。**后续若你重读或参考这些模块,请以仓库里的实际实现为准(DeepSeek/OpenAI 客户端),不要按任务卡里旧的 Anthropic 代码实现或回改。** Task 8 的 `tasks.py` 只 import verifier 的函数名(`generate_test`/`grade_test`/`generate_deliver_criteria`/`grade_delivery`),函数签名未变,不受影响。
 
 ## 完成后
 

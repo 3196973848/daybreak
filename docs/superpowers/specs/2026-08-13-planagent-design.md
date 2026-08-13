@@ -20,7 +20,7 @@ PlanAgent 是一个**目标驱动的规划 Web 应用**:用户输入一个目标
 |---|---|---|
 | 目标领域 | 通用目标规划 | 任何目标(学习/健身/副业等),由 LLM 理解拆解 |
 | 交付形态 | Web 应用 | 有界面交互,适合展示计划与追踪进度 |
-| 智能核心 | LLM 驱动(Claude API) | 处理任意目标,结构化输出保证可解析 |
+| 智能核心 | LLM 驱动(DeepSeek,OpenAI 兼容接口) | 处理任意目标,JSON 模式 + 服务端 Pydantic 校验 |
 | 进度追踪 | 静态计划 + 完成度追踪 | MVP 简化,动态重规划放后续 |
 | 用户体系 | 单用户本地 | 无登录,SQLite 存储,架构最简 |
 | 技术栈 | Python (FastAPI) + React (Vite) + SQLite | 前后端分离,LLM 生态 Python 最佳,模块边界清晰 |
@@ -32,7 +32,7 @@ PlanAgent 是一个**目标驱动的规划 Web 应用**:用户输入一个目标
 ```
 planagent/
 ├── backend/            FastAPI 服务器 (:8000)
-│   ├── llm/            LLM 编排(调 Claude API,结构化输出)
+│   ├── llm/            LLM 编排(调 DeepSeek API,JSON 输出 + 服务端校验)
 │   ├── scheduler/      排程算法(把任务排到具体日期)
 │   ├── models/         数据模型
 │   ├── storage/        SQLite 读写
@@ -106,7 +106,7 @@ POST /api/goals
 }
 ```
 
-- 用 Claude API 的**结构化输出**(JSON schema)保证返回可解析
+- 用 DeepSeek 的 JSON 模式(`response_format=json_object`),服务端 Pydantic 校验保证可解析
 - 校验通过后交给排程算法;校验失败自动重试一次(换提示词),仍失败返回明确错误
 
 ### 排程算法(MVP 规则)
@@ -214,7 +214,7 @@ React + Vite + TypeScript + 轻量数据请求(React Query 或类似),不引入�
 
 - monorepo:backend/ + frontend/,各自独立 requirements.txt / package.json
 - 后端 `uvicorn` 起在 :8000;前端 `vite dev` 起在 :5173 并代理到 :8000
-- LLM 走 Claude API,key 用环境变量 `ANTHROPIC_API_KEY`
+- LLM 走 DeepSeek(OpenAI 兼容接口),模型 `deepseek-v4pro`,key 用环境变量 `DEEPSEEK_API_KEY`(config 经 `PLANAGENT_LLM_API_KEY` 读取)
 - `.superpowers/` 加入 .gitignore
 
 ## 11. 后续迭代(不在 MVP)

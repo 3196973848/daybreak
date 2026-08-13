@@ -1,23 +1,30 @@
+import json
+
 from app.llm.planner import generate_plan
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 
 
-class FakeResponse:
-    def __init__(self, parsed):
-        self.parsed_output = parsed
+class FakeMessage:
+    def __init__(self, content):
+        self.content = content
 
 
-class FakeMessages:
-    def __init__(self, spec):
-        self._spec = spec
+class FakeChoice:
+    def __init__(self, content):
+        self.message = FakeMessage(content)
 
-    def parse(self, **kwargs):
-        return FakeResponse(self._spec)
+
+class FakeCompletions:
+    def __init__(self, content):
+        self._content = content
+
+    def create(self, **kwargs):
+        return type("Resp", (), {"choices": [FakeChoice(self._content)]})()
 
 
 class FakeClient:
-    def __init__(self, spec):
-        self.messages = FakeMessages(spec)
+    def __init__(self, content):
+        self.chat = type("Chat", (), {"completions": FakeCompletions(content)})()
 
 
 def test_generate_plan_returns_spec():
@@ -28,7 +35,16 @@ def test_generate_plan_returns_spec():
             tasks=[TaskSpec(title="任务1", type="learn", effort_hours=1.0)],
         )],
     )
-    client = FakeClient(spec)
+    client = FakeClient(spec.model_dump_json())
     got = generate_plan("目标", "说明", "2026-11-13", client=client)
     assert got == spec
     assert got.milestones[0].tasks[0].type == "learn"
+
+
+def test_generate_plan_handles_invalid_json():
+    client = FakeClient("这不是 JSON")
+    try:
+        generate_plan("目标", "说明", None, client=client)
+        assert False, "should raise"
+    except RuntimeError as exc:
+        assert "JSON" in str(exc)

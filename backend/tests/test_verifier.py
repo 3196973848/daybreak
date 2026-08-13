@@ -7,25 +7,29 @@ from app.llm.verifier import (
     grade_delivery,
     grade_test,
 )
-from app.llm.schema import PlanSpec  # noqa: F401  (ensure schema import works)
 
 
-class FakeResponse:
-    def __init__(self, parsed):
-        self.parsed_output = parsed
+class FakeMessage:
+    def __init__(self, content):
+        self.content = content
 
 
-class FakeMessages:
-    def __init__(self, value):
-        self._value = value
+class FakeChoice:
+    def __init__(self, content):
+        self.message = FakeMessage(content)
 
-    def parse(self, **kwargs):
-        return FakeResponse(self._value)
+
+class FakeCompletions:
+    def __init__(self, content):
+        self._content = content
+
+    def create(self, **kwargs):
+        return type("Resp", (), {"choices": [FakeChoice(self._content)]})()
 
 
 class FakeClient:
     def __init__(self, value):
-        self.messages = FakeMessages(value)
+        self.chat = type("Chat", (), {"completions": FakeCompletions(value.model_dump_json())})()
 
 
 def test_generate_test():
