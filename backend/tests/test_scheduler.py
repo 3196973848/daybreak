@@ -68,6 +68,11 @@ def test_calculate_target_date_rejects_non_positive_value():
         calculate_target_date(date(2026, 8, 13), 0, "day")
 
 
+def test_calculate_target_date_rejects_fractional_value():
+    with pytest.raises(ValueError, match="duration_value 蹇呴』涓烘鏁存暟"):
+        calculate_target_date(date(2026, 8, 13), 1.5, "day")
+
+
 def test_uniform_schedule_spans_start_through_deadline_including_weekend():
     plan = _plan(
         TaskSpec(title="a"),

@@ -6,7 +6,7 @@ DurationUnit = Literal["day", "week", "month"]
 
 
 def calculate_target_date(start_date: date, value: int, unit: DurationUnit) -> date:
-    if value <= 0:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError("duration_value 蹇呴』涓烘鏁存暟")
     if unit == "day":
         return start_date + timedelta(days=value)
