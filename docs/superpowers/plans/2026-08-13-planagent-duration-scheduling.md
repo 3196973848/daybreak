@@ -64,11 +64,11 @@ from app.scheduler.duration import calculate_target_date
 @pytest.mark.parametrize(
     ("start", "value", "unit", "expected"),
     [
-        (date(2026, 8, 13), 10, "day", date(2026, 8, 23)),
-        (date(2026, 8, 13), 2, "week", date(2026, 8, 27)),
-        (date(2026, 1, 31), 1, "month", date(2026, 2, 28)),
-        (date(2024, 1, 31), 1, "month", date(2024, 2, 29)),
-        (date(2026, 11, 30), 3, "month", date(2027, 2, 28)),
+        (date(2026, 8, 13), 10, "day", date(2026, 8, 22)),
+        (date(2026, 8, 13), 2, "week", date(2026, 8, 26)),
+        (date(2026, 1, 31), 1, "month", date(2026, 2, 27)),
+        (date(2024, 1, 31), 1, "month", date(2024, 2, 28)),
+        (date(2026, 11, 30), 3, "month", date(2027, 2, 27)),
     ],
 )
 def test_calculate_target_date(start, value, unit, expected):
@@ -107,15 +107,15 @@ def calculate_target_date(start_date: date, value: int, unit: DurationUnit) -> d
     if value <= 0:
         raise ValueError("duration_value 必须为正整数")
     if unit == "day":
-        return start_date + timedelta(days=value)
+        return start_date + timedelta(days=value - 1)
     if unit == "week":
-        return start_date + timedelta(days=value * 7)
+        return start_date + timedelta(days=value * 7 - 1)
     if unit == "month":
         month_index = start_date.year * 12 + start_date.month - 1 + value
         year, zero_based_month = divmod(month_index, 12)
         month = zero_based_month + 1
         day = min(start_date.day, calendar.monthrange(year, month)[1])
-        return date(year, month, day)
+        return date(year, month, day) - timedelta(days=1)
     raise ValueError("duration_unit 必须为 day、week 或 month")
 ```
 
