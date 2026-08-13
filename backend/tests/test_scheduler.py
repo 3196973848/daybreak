@@ -52,11 +52,13 @@ def test_respects_milestone_order_and_index():
 @pytest.mark.parametrize(
     ("start", "value", "unit", "expected"),
     [
-        (date(2026, 8, 13), 10, "day", date(2026, 8, 23)),
-        (date(2026, 8, 13), 2, "week", date(2026, 8, 27)),
-        (date(2026, 1, 31), 1, "month", date(2026, 2, 28)),
-        (date(2024, 1, 31), 1, "month", date(2024, 2, 29)),
-        (date(2026, 11, 30), 3, "month", date(2027, 2, 28)),
+        (date(2026, 8, 13), 1, "day", date(2026, 8, 13)),
+        (date(2026, 8, 13), 2, "day", date(2026, 8, 14)),
+        (date(2026, 8, 13), 1, "week", date(2026, 8, 19)),
+        (date(2026, 8, 13), 2, "week", date(2026, 8, 26)),
+        (date(2026, 1, 31), 1, "month", date(2026, 2, 27)),
+        (date(2024, 1, 31), 1, "month", date(2024, 2, 28)),
+        (date(2026, 11, 30), 3, "month", date(2027, 2, 27)),
     ],
 )
 def test_calculate_target_date(start, value, unit, expected):
