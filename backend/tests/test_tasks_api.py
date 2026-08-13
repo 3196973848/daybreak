@@ -1,3 +1,5 @@
+import json
+
 from app.llm.verifier import DeliverContent, GradeResult, TestContent
 from app.models import Goal, Milestone, Plan, Task, VerificationRecord
 
@@ -66,6 +68,11 @@ def test_verification_test_flow(client, db_session, monkeypatch):
 
     start = client.get(f"/api/tasks/{task.id}/verification").json()
     assert start["mode"] == "test"
+    assert len(start["content"]["questions"]) == 10
+    public_content = json.dumps(start["content"])
+    assert "correct_answer" not in public_content
+    assert "reference_answer" not in public_content
+    assert "rubric_points" not in public_content
     record_id = start["record_id"]
 
     res = client.post(

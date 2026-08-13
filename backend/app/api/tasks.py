@@ -69,9 +69,11 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
     if task.type == "learn":
         content = generate_test(task.title, task.description)
         mode = "test"
+        public_content = content.public_dump()
     else:
         content = generate_deliver_criteria(task.title, task.description)
         mode = "deliver"
+        public_content = content.model_dump()
     record = VerificationRecord(
         task_id=task.id, mode=mode, content=content.model_dump_json(),
         submission="", result="", passed=False,
@@ -79,7 +81,7 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
     db.add(record)
     db.commit()
     db.refresh(record)
-    return {"mode": mode, "record_id": record.id, "content": content.model_dump()}
+    return {"mode": mode, "record_id": record.id, "content": public_content}
 
 
 @router.post("/{task_id}/verification")
