@@ -97,7 +97,15 @@ export function DailyTasks() {
         />
       </div>
 
-      {verifyTask && <VerificationModal task={verifyTask} onClose={() => setVerifyTask(null)} />}
+      {verifyTask && (
+        <VerificationModal
+          task={verifyTask}
+          onClose={() => setVerifyTask(null)}
+          onVerified={() => {
+            if (id) api.getGoal(Number(id)).then(setGoal).catch(() => undefined)
+          }}
+        />
+      )}
     </div>
   )
 }
