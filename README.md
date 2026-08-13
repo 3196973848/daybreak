@@ -14,7 +14,7 @@
 ```bash
 cd backend
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
+export DEEPSEEK_API_KEY=sk-...
 uvicorn app.main:app --reload --port 8000
 ```
 
