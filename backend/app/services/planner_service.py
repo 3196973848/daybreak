@@ -27,11 +27,10 @@ def create_goal_with_plan(
     if target_date is not None and target_date < start:
         raise ValueError("target_date 不能早于今天")
 
-    goal = Goal(title=title, description=description, target_date=target_date)
-    db.add(goal)
-    db.flush()
-
     try:
+        goal = Goal(title=title, description=description, target_date=target_date)
+        db.add(goal)
+        db.flush()
         spec = generate_plan(title, description, target_date.isoformat() if target_date else None)
         scheduled = schedule(
             spec,

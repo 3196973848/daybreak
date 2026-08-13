@@ -57,6 +57,10 @@ def test_create_goal_forwards_duration(client, db_session, monkeypatch):
     "payload",
     [
         {"title": "目标", "duration_value": 0, "duration_unit": "day"},
+        {"title": "目标", "duration_value": True, "duration_unit": "day"},
+        {"title": "目标", "duration_value": "3", "duration_unit": "day"},
+        {"title": "目标", "duration_value": 1.0, "duration_unit": "day"},
+        {"title": "目标", "duration_value": 1.5, "duration_unit": "day"},
         {"title": "目标", "duration_value": 3},
         {"title": "目标", "duration_unit": "week"},
         {"title": "目标", "duration_value": 1, "duration_unit": "year"},
@@ -69,8 +73,19 @@ def test_create_goal_forwards_duration(client, db_session, monkeypatch):
         {"title": "目标", "target_date": "2000-01-01"},
     ],
 )
-def test_create_goal_rejects_invalid_duration_contract(client, payload):
+def test_create_goal_rejects_invalid_duration_contract(
+    client, db_session, monkeypatch, payload
+):
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
     assert client.post("/api/goals", json=payload).status_code == 422
+    assert called is False
 
 
 def test_get_goal_not_found(client):

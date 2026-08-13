@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StrictInt, model_validator
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -16,7 +16,7 @@ class GoalCreate(BaseModel):
     title: str
     description: str = ""
     target_date: date | None = None
-    duration_value: int | None = Field(default=None, gt=0)
+    duration_value: StrictInt | None = Field(default=None, gt=0)
     duration_unit: Literal["day", "week", "month"] | None = None
 
     @model_validator(mode="after")

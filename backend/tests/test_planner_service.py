@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 
+import pytest
+
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 from app.models import Goal
 from app.services.planner_service import create_goal_with_plan
@@ -82,6 +84,32 @@ def test_legacy_target_date_also_uses_uniform_schedule(db_session, monkeypatch):
         start + timedelta(days=4),
         target,
     ]
+
+
+def test_initial_goal_flush_failure_rolls_back_and_leaves_session_usable(
+    db_session, monkeypatch
+):
+    rollback_calls = []
+    original_rollback = db_session.rollback
+    original_flush = db_session.flush
+
+    def rollback():
+        rollback_calls.append(True)
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "rollback", rollback)
+    monkeypatch.setattr(
+        db_session, "flush", lambda: (_ for _ in ()).throw(RuntimeError("flush failed"))
+    )
+
+    with pytest.raises(RuntimeError, match="flush failed"):
+        create_goal_with_plan(db_session, "目标")
+
+    assert rollback_calls == [True]
+    monkeypatch.setattr(db_session, "flush", original_flush)
+    db_session.add(Goal(title="可恢复"))
+    db_session.commit()
+    assert db_session.query(Goal).filter_by(title="可恢复").one() is not None
 
 
 def test_create_goal_persists_full_tree(db_session, monkeypatch):
