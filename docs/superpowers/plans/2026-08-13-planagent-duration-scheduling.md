@@ -320,16 +320,16 @@ def test_duration_persists_deadline_and_uses_uniform_task_and_milestone_dates(
         duration_value=10,
         duration_unit="day",
     )
-    assert goal.target_date == start + timedelta(days=10)
+    assert goal.target_date == start + timedelta(days=9)
     assert [task.scheduled_date for ms in goal.plan.milestones for task in ms.tasks] == [
         start,
-        start + timedelta(days=5),
-        start + timedelta(days=10),
+        start + timedelta(days=4),
+        start + timedelta(days=9),
     ]
     assert [ms.due_date for ms in goal.plan.milestones] == [
-        start + timedelta(days=5),
-        start + timedelta(days=10),
-        start + timedelta(days=10),
+        start + timedelta(days=4),
+        start + timedelta(days=9),
+        start + timedelta(days=9),
     ]
 
 
