@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import Goal, Milestone, Plan, Task
 
 
@@ -16,7 +18,7 @@ def _build_goal(db_session):
 def test_create_goal(client, db_session, monkeypatch):
     from app.services.planner_service import create_goal_with_plan
 
-    def fake(db, title, description, target_date):
+    def fake(db, title, description, target_date, duration_value=None, duration_unit=None):
         return _build_goal(db_session)
 
     monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
@@ -25,6 +27,50 @@ def test_create_goal(client, db_session, monkeypatch):
     body = res.json()
     assert body["title"] == "目标"
     assert body["plan"]["milestones"][0]["tasks"][0]["title"] == "任务1"
+
+
+def test_create_goal_forwards_duration(client, db_session, monkeypatch):
+    captured = {}
+
+    def fake(db, title, description, target_date, duration_value=None, duration_unit=None):
+        captured.update(
+            target_date=target_date,
+            duration_value=duration_value,
+            duration_unit=duration_unit,
+        )
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+    res = client.post(
+        "/api/goals",
+        json={"title": "目标", "duration_value": 3, "duration_unit": "month"},
+    )
+    assert res.status_code == 201
+    assert captured == {
+        "target_date": None,
+        "duration_value": 3,
+        "duration_unit": "month",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": "目标", "duration_value": 0, "duration_unit": "day"},
+        {"title": "目标", "duration_value": 3},
+        {"title": "目标", "duration_unit": "week"},
+        {"title": "目标", "duration_value": 1, "duration_unit": "year"},
+        {
+            "title": "目标",
+            "target_date": "2099-01-01",
+            "duration_value": 3,
+            "duration_unit": "month",
+        },
+        {"title": "目标", "target_date": "2000-01-01"},
+    ],
+)
+def test_create_goal_rejects_invalid_duration_contract(client, payload):
+    assert client.post("/api/goals", json=payload).status_code == 422
 
 
 def test_get_goal_not_found(client):

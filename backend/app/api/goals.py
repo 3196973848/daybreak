@@ -1,7 +1,8 @@
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -15,6 +16,18 @@ class GoalCreate(BaseModel):
     title: str
     description: str = ""
     target_date: date | None = None
+    duration_value: int | None = Field(default=None, gt=0)
+    duration_unit: Literal["day", "week", "month"] | None = None
+
+    @model_validator(mode="after")
+    def validate_schedule_input(self):
+        if (self.duration_value is None) != (self.duration_unit is None):
+            raise ValueError("duration_value 与 duration_unit 必须同时提供")
+        if self.target_date is not None and self.duration_value is not None:
+            raise ValueError("target_date 与预计完成时长不能同时提供")
+        if self.target_date is not None and self.target_date < date.today():
+            raise ValueError("target_date 不能早于今天")
+        return self
 
 
 def serialize_task(t):
@@ -56,7 +69,14 @@ def serialize_goal(goal, include_plan=False):
 @router.post("", status_code=201)
 def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
     try:
-        goal = create_goal_with_plan(db, payload.title, payload.description, payload.target_date)
+        goal = create_goal_with_plan(
+            db,
+            payload.title,
+            payload.description,
+            target_date=payload.target_date,
+            duration_value=payload.duration_value,
+            duration_unit=payload.duration_unit,
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"计划生成失败：{exc}")
     return serialize_goal(goal, include_plan=True)
