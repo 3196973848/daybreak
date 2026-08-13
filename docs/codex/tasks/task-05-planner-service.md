@@ -133,4 +133,9 @@ git commit -m "feat: goal creation service wiring llm+scheduler+storage"
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `834156c`
+- pytest 摘要: `python -m pytest tests/test_planner_service.py -v` → `1 passed, 1 warning in 1.50s`
+- concerns:
+  - 当前受限沙箱禁止 pytest 写 SQLite/缓存，RED/GREEN 验证均在获批的沙箱外执行。
+  - 测试通过 monkeypatch 隔离真实 LLM 调用，覆盖排程与完整 ORM 树落库。
+  - 存在 1 条第三方 `StarletteDeprecationWarning`。

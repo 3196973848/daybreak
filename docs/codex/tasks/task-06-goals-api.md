@@ -198,4 +198,11 @@ git commit -m "feat: goals REST api"
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `707cf99`
+- pytest 摘要: `python -m pytest tests/test_goals_api.py -v` → `4 passed, 1 warning in 0.13s`
+- concerns:
+  - 当前受限沙箱禁止 pytest 写 SQLite/缓存，RED/GREEN 验证均在获批的沙箱外执行。
+  - 任务卡首个 fake 的签名遗漏 `db` 参数，已按权威服务接口修正为 `(db, title, description, target_date)`。
+  - `sqlite:///:memory:` 默认连接在线程间不共享，FastAPI 同步路由看不到 fixture 建表；已在测试 engine 加 `StaticPool`。
+  - 原模型缺少 Goal→Plan 删除级联，DELETE 会尝试将非空 `plans.goal_id` 置空；已为一对一所有权关系补 `cascade="all, delete-orphan"`。
+  - 存在 1 条第三方 `StarletteDeprecationWarning`。

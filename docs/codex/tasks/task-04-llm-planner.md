@@ -130,4 +130,9 @@ git commit -m "feat: llm plan generation with structured output"
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `f002ba1`
+- pytest 摘要: `python -m pytest tests/test_planner.py -v` → `1 passed, 1 warning in 1.76s`
+- concerns:
+  - 当前受限沙箱禁止 pytest 写缓存，RED/GREEN 验证均在获批的沙箱外执行。
+  - fake client 测试覆盖结构化返回；真实 Anthropic 网络调用未在单元测试中执行。
+  - 存在 1 条由全局测试基建触发的第三方 `StarletteDeprecationWarning`。

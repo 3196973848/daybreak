@@ -166,4 +166,9 @@ git commit -m "feat: backend scaffold with health check"
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `195187b`
+- pytest 摘要: `python -m pytest tests/test_health.py -v` → `1 passed, 1 warning in 0.04s`
+- concerns:
+  - 当前受限沙箱禁止在 `backend/` 创建 SQLite 文件，因此验收命令在获批的沙箱外执行。
+  - FastAPI 0.141.1 / Starlette 1.6.0 对当前 `TestClient` 兼容层产生 1 条 `StarletteDeprecationWarning`，不影响测试通过。
+  - 为使本任务的 `init_db()` 在 Task 02 前可独立启动，创建了最小 `app/models.py` 占位；Task 02 将用正式模型内容替换。

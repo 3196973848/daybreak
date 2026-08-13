@@ -146,4 +146,8 @@ git commit -m "feat: sqlalchemy models for goal/plan/milestone/task/verification
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `cd5f40e`
+- pytest 摘要: `python -m pytest tests/test_models.py -v` → `1 passed, 1 warning in 0.05s`
+- concerns:
+  - 当前受限沙箱禁止 pytest 写 SQLite/缓存，验收命令在获批的沙箱外执行。
+  - 与 Task 01 相同，存在 1 条第三方 `StarletteDeprecationWarning`，不影响模型往返测试。

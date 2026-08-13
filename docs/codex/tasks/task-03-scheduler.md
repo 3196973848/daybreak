@@ -143,4 +143,8 @@ git commit -m "feat: deterministic scheduler pure function"
 
 ## 报告
 
-<!-- Codex: 完成后在此填写 -->
+- 提交 hash: `b752cc0`
+- pytest 摘要: `python -m pytest tests/test_scheduler.py -v` → `3 passed, 1 warning in 0.03s`
+- concerns:
+  - 当前受限沙箱禁止 pytest 写缓存，RED/GREEN 验证均在获批的沙箱外执行。
+  - 存在 1 条由全局测试基建导入 `TestClient` 触发的第三方 `StarletteDeprecationWarning`；调度测试本身不使用 HTTP。
