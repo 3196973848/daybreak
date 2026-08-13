@@ -1,6 +1,9 @@
 import pytest
+from pydantic import ValidationError
 
+from app.api.goals import GoalCreate
 from app.models import Goal, Milestone, Plan, Task
+from app.services.capacity import InsufficientCapacityError
 
 
 def _build_goal(db_session):
@@ -18,7 +21,16 @@ def _build_goal(db_session):
 def test_create_goal(client, db_session, monkeypatch):
     from app.services.planner_service import create_goal_with_plan
 
-    def fake(db, title, description, target_date, duration_value=None, duration_unit=None):
+    def fake(
+        db,
+        title,
+        description,
+        target_date,
+        duration_value=None,
+        duration_unit=None,
+        daily_hours=2.0,
+    ):
+        assert daily_hours == 2.0
         return _build_goal(db_session)
 
     monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
@@ -32,11 +44,20 @@ def test_create_goal(client, db_session, monkeypatch):
 def test_create_goal_forwards_duration(client, db_session, monkeypatch):
     captured = {}
 
-    def fake(db, title, description, target_date, duration_value=None, duration_unit=None):
+    def fake(
+        db,
+        title,
+        description,
+        target_date,
+        duration_value=None,
+        duration_unit=None,
+        daily_hours=2.0,
+    ):
         captured.update(
             target_date=target_date,
             duration_value=duration_value,
             duration_unit=duration_unit,
+            daily_hours=daily_hours,
         )
         return _build_goal(db_session)
 
@@ -50,7 +71,92 @@ def test_create_goal_forwards_duration(client, db_session, monkeypatch):
         "target_date": None,
         "duration_value": 3,
         "duration_unit": "month",
+        "daily_hours": 2.0,
     }
+
+
+def test_create_goal_forwards_valid_daily_hours(client, db_session, monkeypatch):
+    captured = {}
+
+    def fake(*args, **kwargs):
+        captured.update(kwargs)
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+    response = client.post(
+        "/api/goals",
+        json={"title": "目标", "daily_hours": 2.5},
+    )
+
+    assert response.status_code == 201
+    assert captured["daily_hours"] == 2.5
+
+
+@pytest.mark.parametrize("daily_hours", [True, "2", 0, -0.5, 0.75])
+def test_create_goal_rejects_invalid_daily_hours_without_calling_service(
+    client, monkeypatch, daily_hours
+):
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+    response = client.post(
+        "/api/goals",
+        json={
+            "title": "目标",
+            "duration_value": 7,
+            "duration_unit": "day",
+            "daily_hours": daily_hours,
+        },
+    )
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_goal_create_rejects_non_finite_daily_hours():
+    with pytest.raises(ValidationError):
+        GoalCreate(title="目标", daily_hours=float("inf"))
+
+
+def test_create_goal_returns_structured_capacity_error(client, monkeypatch):
+    def fake(*args, **kwargs):
+        raise InsufficientCapacityError(4.0, 4.0, 3)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+    response = client.post(
+        "/api/goals",
+        json={
+            "title": "目标",
+            "duration_value": 2,
+            "duration_unit": "day",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "insufficient_capacity",
+        "message": "当前时间不足",
+        "required_hours": 4.0,
+        "available_hours": 4.0,
+        "minimum_days": 3,
+        "suggested_duration": {"value": 3, "unit": "day"},
+    }
+
+
+def test_create_goal_keeps_other_generation_errors_as_bad_gateway(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.goals.create_goal_with_plan",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("模型离线")),
+    )
+
+    response = client.post("/api/goals", json={"title": "目标"})
+
+    assert response.status_code == 502
+    assert "模型离线" in response.json()["detail"]
 
 
 @pytest.mark.parametrize(

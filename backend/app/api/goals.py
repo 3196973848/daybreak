@@ -1,12 +1,14 @@
+import math
 from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, StrictInt, model_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Goal
+from ..services.capacity import InsufficientCapacityError
 from ..services.planner_service import create_goal_with_plan
 
 router = APIRouter(prefix="/api/goals", tags=["goals"])
@@ -18,6 +20,18 @@ class GoalCreate(BaseModel):
     target_date: date | None = None
     duration_value: StrictInt | None = Field(default=None, gt=0)
     duration_unit: Literal["day", "week", "month"] | None = None
+    daily_hours: float = 2.0
+
+    @field_validator("daily_hours", mode="before")
+    @classmethod
+    def validate_daily_hours(cls, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("daily_hours 必须是数字")
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("daily_hours 必须是有限的正数")
+        if not math.isclose(value * 2, round(value * 2)):
+            raise ValueError("daily_hours 必须以 0.5 小时递增")
+        return float(value)
 
     @model_validator(mode="after")
     def validate_schedule_input(self):
@@ -76,7 +90,10 @@ def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
             target_date=payload.target_date,
             duration_value=payload.duration_value,
             duration_unit=payload.duration_unit,
+            daily_hours=payload.daily_hours,
         )
+    except InsufficientCapacityError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail())
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"计划生成失败：{exc}")
     return serialize_goal(goal, include_plan=True)

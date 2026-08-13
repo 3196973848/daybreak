@@ -4,6 +4,7 @@ import pytest
 
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 from app.models import Goal
+from app.services.capacity import InsufficientCapacityError
 from app.services.planner_service import create_goal_with_plan
 
 
@@ -14,11 +15,16 @@ def _fake_spec():
             MilestoneSpec(
                 title="里程碑1", order=1,
                 tasks=[
-                    TaskSpec(title="任务1", type="learn", effort_hours=1.0),
-                    TaskSpec(title="任务2", type="practice", effort_hours=2.0),
+                    TaskSpec(
+                        title="任务1", description="成果1",
+                        type="learn", effort_hours=1.0,
+                    ),
+                    TaskSpec(
+                        title="任务2", description="成果2",
+                        type="practice", effort_hours=2.0,
+                    ),
                 ],
             ),
-            MilestoneSpec(title="空里程碑", order=2, tasks=[]),
         ],
     )
 
@@ -30,18 +36,36 @@ def _three_task_spec():
             MilestoneSpec(
                 title="阶段一",
                 order=1,
-                tasks=[TaskSpec(title="任务1"), TaskSpec(title="任务2")],
+                tasks=[
+                    TaskSpec(title="任务1", description="成果1"),
+                    TaskSpec(title="任务2", description="成果2"),
+                ],
             ),
             MilestoneSpec(
                 title="阶段二",
                 order=2,
-                tasks=[TaskSpec(title="任务3")],
+                tasks=[TaskSpec(title="任务3", description="成果3")],
             ),
+        ],
+    )
+
+
+def _plan_with_efforts(*efforts):
+    return PlanSpec(
+        strategy="原子计划",
+        milestones=[
             MilestoneSpec(
-                title="空阶段",
-                order=3,
-                tasks=[],
-            ),
+                title="阶段",
+                order=1,
+                tasks=[
+                    TaskSpec(
+                        title=f"任务{index}",
+                        description=f"成果{index}",
+                        effort_hours=effort,
+                    )
+                    for index, effort in enumerate(efforts, start=1)
+                ],
+            )
         ],
     )
 
@@ -62,12 +86,11 @@ def test_duration_persists_deadline_and_uses_uniform_task_and_milestone_dates(
     assert goal.target_date == start + timedelta(days=9)
     assert [task.scheduled_date for ms in goal.plan.milestones for task in ms.tasks] == [
         start,
-        start + timedelta(days=4),
+        start,
         start + timedelta(days=9),
     ]
     assert [ms.due_date for ms in goal.plan.milestones] == [
-        start + timedelta(days=4),
-        start + timedelta(days=9),
+        start,
         start + timedelta(days=9),
     ]
 
@@ -81,7 +104,7 @@ def test_legacy_target_date_also_uses_uniform_schedule(db_session, monkeypatch):
     goal = create_goal_with_plan(db_session, "目标", target_date=target)
     assert [task.scheduled_date for ms in goal.plan.milestones for task in ms.tasks] == [
         start,
-        start + timedelta(days=4),
+        start,
         target,
     ]
 
@@ -109,6 +132,9 @@ def test_deadline_empty_milestones_inherit_previous_nonempty_due_or_start(
     monkeypatch.setattr(
         "app.services.planner_service.generate_plan", lambda *a, **k: spec
     )
+    monkeypatch.setattr(
+        "app.services.planner_service.validate_atomic_plan", lambda *a, **k: None
+    )
     start = date.today()
     target = start + timedelta(days=8)
 
@@ -118,7 +144,7 @@ def test_deadline_empty_milestones_inherit_previous_nonempty_due_or_start(
         start,
         start,
         start,
-        target,
+        start,
     ]
 
 
@@ -134,6 +160,9 @@ def test_initial_goal_flush_failure_rolls_back_and_leaves_session_usable(
         original_rollback()
 
     monkeypatch.setattr(db_session, "rollback", rollback)
+    monkeypatch.setattr(
+        "app.services.planner_service.generate_plan", lambda *a, **k: _fake_spec()
+    )
     monkeypatch.setattr(
         db_session, "flush", lambda: (_ for _ in ()).throw(RuntimeError("flush failed"))
     )
@@ -162,4 +191,114 @@ def test_create_goal_persists_full_tree(db_session, monkeypatch):
     assert ms.tasks[0].scheduled_date == date.today()
     assert ms.tasks[1].scheduled_date == date.today() + timedelta(days=1)
     assert ms.tasks[1].verified is False
-    assert goal.plan.milestones[1].due_date == ms.due_date
+
+
+def test_invalid_atomic_plan_is_regenerated_with_feedback(db_session, monkeypatch):
+    invalid = _plan_with_efforts(3.0)
+    valid = _plan_with_efforts(1.0, 1.0)
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        return invalid if len(calls) == 1 else valid
+
+    monkeypatch.setattr("app.services.planner_service.generate_plan", fake)
+    goal = create_goal_with_plan(
+        db_session,
+        "学习交易",
+        duration_value=2,
+        duration_unit="day",
+        daily_hours=2.0,
+    )
+
+    assert goal.id is not None
+    assert len(calls) == 2
+    assert calls[0]["daily_hours"] == 2.0
+    assert calls[0]["feedback"] is None
+    assert "超过每日投入时间" in calls[1]["feedback"]
+
+
+def test_invalid_atomic_plan_stops_after_three_attempts_and_rolls_back(
+    db_session, monkeypatch
+):
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        return _plan_with_efforts(3.0)
+
+    monkeypatch.setattr("app.services.planner_service.generate_plan", fake)
+
+    with pytest.raises(RuntimeError, match="无法生成有效的原子计划"):
+        create_goal_with_plan(db_session, "学习交易", daily_hours=2.0)
+
+    assert len(calls) == 3
+    assert db_session.query(Goal).count() == 0
+
+
+def test_capacity_shortage_rolls_back_and_reports_suggestion(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.services.planner_service.generate_plan",
+        lambda *a, **k: _plan_with_efforts(1.5, 1.5, 1.0),
+    )
+
+    with pytest.raises(InsufficientCapacityError) as caught:
+        create_goal_with_plan(
+            db_session,
+            "目标",
+            duration_value=2,
+            duration_unit="day",
+            daily_hours=2.0,
+        )
+
+    assert caught.value.required_hours == 4.0
+    assert caught.value.available_hours == 4.0
+    assert caught.value.minimum_days == 3
+    assert caught.value.suggested_duration == {"value": 3, "unit": "day"}
+    assert db_session.query(Goal).count() == 0
+
+
+def test_same_day_tasks_share_dates_and_milestones_use_final_task_dates(
+    db_session, monkeypatch
+):
+    spec = PlanSpec(
+        strategy="分组计划",
+        milestones=[
+            MilestoneSpec(
+                title="阶段一",
+                order=1,
+                tasks=[
+                    TaskSpec(title="任务1", description="成果1", effort_hours=0.5),
+                    TaskSpec(title="任务2", description="成果2", effort_hours=1.5),
+                ],
+            ),
+            MilestoneSpec(
+                title="阶段二",
+                order=2,
+                tasks=[
+                    TaskSpec(title="任务3", description="成果3", effort_hours=1.0),
+                    TaskSpec(title="任务4", description="成果4", effort_hours=1.0),
+                ],
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        "app.services.planner_service.generate_plan", lambda *a, **k: spec
+    )
+    start = date.today()
+
+    goal = create_goal_with_plan(
+        db_session,
+        "目标",
+        duration_value=2,
+        duration_unit="day",
+        daily_hours=2.0,
+    )
+
+    assert [[task.scheduled_date for task in ms.tasks] for ms in goal.plan.milestones] == [
+        [start, start],
+        [start + timedelta(days=1), start + timedelta(days=1)],
+    ]
+    assert [ms.due_date for ms in goal.plan.milestones] == [
+        ms.tasks[-1].scheduled_date for ms in goal.plan.milestones
+    ]
