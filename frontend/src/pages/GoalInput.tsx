@@ -67,7 +67,17 @@ export function GoalInput() {
         </button>
       </form>
 
-      <GoalList goals={goals} onDelete={async (id) => { await api.deleteGoal(id); void loadGoals() }} />
+      <GoalList
+        goals={goals}
+        onDelete={async (id) => {
+          try {
+            await api.deleteGoal(id)
+            void loadGoals()
+          } catch (e) {
+            setError(e instanceof Error ? e.message : '删除失败')
+          }
+        }}
+      />
     </div>
   )
 }

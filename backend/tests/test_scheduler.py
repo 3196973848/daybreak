@@ -40,7 +40,7 @@ def test_respects_milestone_order_and_index():
         ],
     )
     result = schedule(plan, date(2026, 8, 13), blocks_per_day=2)
-    assert [(r.milestone_order, r.task_index, r.date) for r in result] == [
+    assert [(r.milestone_index, r.task_index, r.date) for r in result] == [
+        (0, 0, date(2026, 8, 13)),
         (1, 0, date(2026, 8, 13)),
-        (2, 0, date(2026, 8, 13)),
     ]

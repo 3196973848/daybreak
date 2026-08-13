@@ -53,6 +53,8 @@ def set_complete(task_id: int, payload: TaskComplete, db: Session = Depends(get_
     else:
         task.status = "todo"
         task.completed_at = None
+        # 取消完成即撤销已验证状态,保持状态一致
+        task.verified = False
     _refresh_milestone(task.milestone)
     db.commit()
     db.refresh(task)

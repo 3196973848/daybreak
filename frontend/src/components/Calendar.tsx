@@ -1,3 +1,5 @@
+import { todayLocal } from '../utils/date'
+
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 
 export function Calendar({
@@ -11,7 +13,7 @@ export function Calendar({
 }) {
   const first = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = todayLocal()
   const cells: Array<number | null> = [...Array(first).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
 
   function onMonthChange(delta: number) {

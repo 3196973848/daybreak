@@ -21,7 +21,16 @@ export function PlanOverview() {
   }, [id])
 
   if (error) return <p style={{ color: '#f87171' }}>{error}</p>
-  if (!goal || !goal.plan) return <p className="faint">加载中…</p>
+  if (!goal) return <p className="faint">加载中…</p>
+  if (!goal.plan) {
+    return (
+      <div style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>
+        <h1 style={{ fontSize: 22 }}>{goal.title}</h1>
+        <p style={{ color: '#f87171' }}>此目标未生成计划(可能生成失败)。请返回删除后重试。</p>
+        <Link to="/" className="btn-ghost">‹ 返回</Link>
+      </div>
+    )
+  }
 
   const tasks = allTasks(goal.plan)
   const done = tasks.filter((t) => t.status === 'done').length

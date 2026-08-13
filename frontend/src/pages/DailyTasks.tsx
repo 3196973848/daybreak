@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { GoalDTO, TaskDTO } from '../types'
 import { Calendar } from '../components/Calendar'
 import { VerificationModal } from '../components/VerificationModal'
+import { todayLocal } from '../utils/date'
 
 const TYPE_TEXT: Record<string, string> = { learn: '学习', practice: '实操', project: '项目' }
 
@@ -14,8 +15,9 @@ function toKey(iso: string | null): string {
 export function DailyTasks() {
   const { id } = useParams()
   const [goal, setGoal] = useState<GoalDTO | null>(null)
-  const [selected, setSelected] = useState(() => new Date().toISOString().slice(0, 10))
+  const [selected, setSelected] = useState(todayLocal)
   const [verifyTask, setVerifyTask] = useState<TaskDTO | null>(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -33,25 +35,38 @@ export function DailyTasks() {
   )
 
   async function toggle(task: TaskDTO) {
-    const updated = await api.setTaskCompleted(task.id, task.status !== 'done')
-    setGoal((g) => (g ? {
-      ...g,
-      plan: {
-        ...g.plan!,
-        milestones: g.plan!.milestones.map((m) => ({
-          ...m,
-          tasks: m.tasks.map((t) => (t.id === updated.id ? updated : t)),
-        })),
-      },
-    } : g))
+    try {
+      const updated = await api.setTaskCompleted(task.id, task.status !== 'done')
+      setGoal((g) => (g ? {
+        ...g,
+        plan: {
+          ...g.plan!,
+          milestones: g.plan!.milestones.map((m) => ({
+            ...m,
+            tasks: m.tasks.map((t) => (t.id === updated.id ? updated : t)),
+          })),
+        },
+      } : g))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '操作失败')
+    }
   }
 
-  if (!goal || !goal.plan) return <p className="faint">加载中…</p>
+  if (!goal) return <p className="faint">加载中…</p>
+  if (!goal.plan) {
+    return (
+      <div style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>
+        <Link to={`/goals/${goal.id}`} className="btn-ghost">‹ 返回总览</Link>
+        <p style={{ color: '#f87171', marginTop: 16 }}>此目标未生成计划。</p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 760, margin: '40px auto', padding: '0 16px' }}>
       <Link to={`/goals/${goal.id}`} className="btn-ghost">‹ 返回总览</Link>
       <h1 style={{ fontSize: 22 }}>{goal.title}</h1>
+      {error && <p style={{ color: '#f87171', fontSize: 13, marginTop: 8 }}>{error}</p>}
 
       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginTop: 16, flexWrap: 'wrap' }}>
         <div className="card" style={{ padding: 16, flex: 1, minWidth: 300 }}>

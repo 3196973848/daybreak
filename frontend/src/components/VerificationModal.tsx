@@ -23,6 +23,10 @@ export function VerificationModal({
   }, [task.id])
 
   async function submit() {
+    if (recordId === 0 || content === null) {
+      setError('检验内容尚未加载，无法提交')
+      return
+    }
     setLoading(true)
     setError('')
     try {

@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from ..config import settings
 from .schema import PlanSpec
@@ -74,4 +75,7 @@ def parse_plan_spec(text: str) -> PlanSpec:
         data: Any = json.loads(text)
     except json.JSONDecodeError as exc:
         raise RuntimeError("LLM 输出不是合法 JSON") from exc
-    return PlanSpec.model_validate(data)
+    try:
+        return PlanSpec.model_validate(data)
+    except ValidationError as exc:
+        raise RuntimeError("LLM 输出不符合结构") from exc
