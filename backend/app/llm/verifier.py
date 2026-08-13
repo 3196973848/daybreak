@@ -1,21 +1,55 @@
 import json
-from typing import Any, List
+from typing import Any, Literal
+from uuid import uuid4
 
 from openai import OpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from ..config import settings
 
 
 class Question(BaseModel):
     id: int
-    type: str  # choice | short
-    text: str
-    options: List[str] = []
+    type: Literal["choice", "short"]
+    text: str = Field(min_length=1)
+    options: list[str] = Field(default_factory=list)
+    correct_answer: str | None = None
+    reference_answer: str | None = None
+    rubric_points: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_private_answer(self):
+        if self.type == "choice":
+            if len(self.options) != 4 or self.correct_answer not in self.options:
+                raise ValueError("选择题必须有四个选项且正确答案属于选项")
+            if self.reference_answer is not None or self.rubric_points:
+                raise ValueError("选择题不能包含简答题评分字段")
+        else:
+            if self.options or self.correct_answer is not None:
+                raise ValueError("简答题不能包含选项或选择题答案")
+            if not self.reference_answer or not self.rubric_points:
+                raise ValueError("简答题必须包含参考答案和评分点")
+        return self
+
+    def public_dump(self) -> dict[str, object]:
+        return {"id": self.id, "type": self.type, "text": self.text, "options": self.options}
 
 
 class TestContent(BaseModel):
-    questions: List[Question]
+    questions: list[Question]
+
+    @model_validator(mode="after")
+    def validate_quiz_shape(self):
+        if len(self.questions) != 10:
+            raise ValueError("检验题必须恰好为 10 道")
+        if [q.id for q in self.questions] != list(range(1, 11)):
+            raise ValueError("检验题号必须为 1 到 10")
+        if [q.type for q in self.questions] != ["choice"] * 7 + ["short"] * 3:
+            raise ValueError("检验题必须为前 7 道选择题和后 3 道简答题")
+        return self
+
+    def public_dump(self) -> dict[str, object]:
+        return {"questions": [question.public_dump() for question in self.questions]}
 
 
 class DeliverContent(BaseModel):
@@ -27,9 +61,9 @@ class GradeResult(BaseModel):
     feedback: str
 
 
-TEST_GENERATE_PROMPT = """你是学习测试出题助手。基于学习任务内容生成 2-3 道选择题和 1 道简答题。
-选择题必须含 4 个选项且仅一个正确；简答题 options 为空。只输出 JSON，不输出其它内容。
-输出格式：{"questions": [{"id": 1, "type": "choice", "text": "...", "options": ["a","b","c","d"]}, {"id": 2, "type": "short", "text": "...", "options": []}]}"""
+TEST_GENERATE_PROMPT = """你是学习测试出题助手。基于学习任务内容生成恰好 10 道检验题：前 7 道为选择题，后 3 道为简答题。
+只输出 JSON，不输出其它内容。选择题必须包含 id、type="choice"、text、恰好 4 个 options、且 correct_answer 必须是 options 之一；reference_answer 必须为 null，rubric_points 必须为 []。简答题必须包含 id、type="short"、text、options=[]、correct_answer=null、非空 reference_answer、以及非空 rubric_points。题目 id 必须依次为 1 到 10。
+输出格式：{"questions": [{"id": 1, "type": "choice", "text": "...", "options": ["a", "b", "c", "d"], "correct_answer": "a", "reference_answer": null, "rubric_points": []}, {"id": 8, "type": "short", "text": "...", "options": [], "correct_answer": null, "reference_answer": "...", "rubric_points": ["..."]}]}"""
 
 GRADE_TEST_PROMPT = """你是严格但公平的评分老师。依据学习任务内容与题目，判断用户答案正确率。
 只输出 JSON：{"score": 0-1(正确率), "feedback": "中文评语"}。"""
@@ -71,12 +105,34 @@ def _parse(client, system_prompt, user_prompt, output_model, max_tokens=4000):
         raise RuntimeError("LLM 输出不符合结构") from exc
 
 
-def generate_test(task_title: str, task_description: str, client=None) -> TestContent:
-    return _parse(
-        client, TEST_GENERATE_PROMPT,
-        f"任务：{task_title}\n内容：{task_description or '无'}",
-        TestContent,
-    )
+def _normalize_question(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def generate_test(
+    task_title: str,
+    task_description: str,
+    previous_question_texts: list[str] | None = None,
+    client=None,
+) -> TestContent:
+    previous = {_normalize_question(text) for text in previous_question_texts or []}
+    errors = []
+    for _attempt in range(3):
+        request_id = str(uuid4())
+        user_prompt = (
+            f"任务：{task_title}\n内容：{task_description or '无'}\n"
+            f"本次请求标识：{request_id}\n"
+            f"不得重复的历史题干：{json.dumps(sorted(previous), ensure_ascii=False)}"
+        )
+        try:
+            content = _parse(client, TEST_GENERATE_PROMPT, user_prompt, TestContent, max_tokens=8000)
+            current = {_normalize_question(question.text) for question in content.questions}
+            if current & previous:
+                raise RuntimeError("题干与历史检验重复")
+            return content
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    raise RuntimeError(f"生成 10 道检验题失败：{'；'.join(errors)}")
 
 
 def grade_test(

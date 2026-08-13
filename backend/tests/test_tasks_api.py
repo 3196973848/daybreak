@@ -15,6 +15,34 @@ def _build_task(db_session, task_type="learn"):
     return t
 
 
+def _quiz_content():
+    questions = [
+        {
+            "id": i,
+            "type": "choice",
+            "text": f"Q{i}",
+            "options": ["A", "B", "C", "D"],
+            "correct_answer": "A",
+            "reference_answer": None,
+            "rubric_points": [],
+        }
+        for i in range(1, 8)
+    ]
+    questions.extend(
+        {
+            "id": i,
+            "type": "short",
+            "text": f"Q{i}",
+            "options": [],
+            "correct_answer": None,
+            "reference_answer": f"Reference {i}",
+            "rubric_points": ["point one"],
+        }
+        for i in range(8, 11)
+    )
+    return TestContent.model_validate({"questions": questions})
+
+
 def test_set_complete_updates_milestone(client, db_session):
     task = _build_task(db_session)
     res = client.patch(f"/api/tasks/{task.id}", json={"completed": True})
@@ -27,10 +55,8 @@ def test_set_complete_updates_milestone(client, db_session):
 def test_verification_test_flow(client, db_session, monkeypatch):
     task = _build_task(db_session, "learn")
 
-    def fake_generate_test(title, desc, client=None):
-        return TestContent(questions=[
-            {"id": 1, "type": "choice", "text": "Q", "options": ["a", "b"]},
-        ])
+    def fake_generate_test(title, desc, previous_question_texts=None, client=None):
+        return _quiz_content()
 
     def fake_grade_test(title, desc, content, answers, client=None):
         return GradeResult(score=0.9, feedback="通过")
