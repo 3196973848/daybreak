@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GoalDTO } from '../types'
 import { GoalList } from '../components/GoalList'
+import { TopBar } from '../components/TopBar'
 
 export function GoalInput() {
   const navigate = useNavigate()
@@ -36,48 +37,53 @@ export function GoalInput() {
   }
 
   return (
-    <div style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>
-      <h1 style={{ fontSize: 24 }}>PlanAgent</h1>
-      <p className="dim">输入一个目标，AI 会把它拆解成里程碑和每日任务。</p>
+    <>
+      <TopBar />
+      <div className="page page-narrow">
+        <p className="dim" style={{ marginTop: 8 }}>
+          输入一个目标，AI 会把它拆解成里程碑和每日任务。
+        </p>
 
-      <form className="card" style={{ padding: 20, marginTop: 16 }} onSubmit={onSubmit}>
-        <label className="dim" style={{ fontSize: 13 }}>目标标题 *</label>
-        <input
-          className="input" style={{ marginTop: 6 }}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="例如：3个月从零学会Python编程"
-        />
-        <label className="dim" style={{ fontSize: 13, display: 'block', marginTop: 14 }}>补充说明(可选)</label>
-        <textarea
-          className="input" style={{ marginTop: 6, minHeight: 64 }}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="想达到什么程度？有什么约束？"
-        />
-        <label className="dim" style={{ fontSize: 13, display: 'block', marginTop: 14 }}>目标完成日期(可选)</label>
-        <input
-          type="date" className="input" style={{ marginTop: 6 }}
-          value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
-        />
-        {error && <p style={{ color: '#f87171', fontSize: 13, marginTop: 10 }}>{error}</p>}
-        <button className="btn" disabled={loading} style={{ marginTop: 18 }}>
-          {loading ? 'AI 正在拆解计划…' : '生成计划'}
-        </button>
-      </form>
+        <form className="card" style={{ padding: 24, marginTop: 20 }} onSubmit={onSubmit}>
+          <label className="dim" style={{ fontSize: 13 }}>目标标题 *</label>
+          <input
+            className="input" style={{ marginTop: 6 }}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="例如：3个月从零学会Python编程"
+            autoFocus
+          />
+          <label className="dim" style={{ fontSize: 13, display: 'block', marginTop: 16 }}>补充说明(可选)</label>
+          <textarea
+            className="input" style={{ marginTop: 6, minHeight: 64 }}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="想达到什么程度？有什么约束？"
+          />
+          <label className="dim" style={{ fontSize: 13, display: 'block', marginTop: 16 }}>目标完成日期(可选)</label>
+          <input
+            type="date" className="input" style={{ marginTop: 6 }}
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
+          />
+          {error && <p className="error-text" style={{ marginTop: 12 }}>{error}</p>}
+          <button className="btn" disabled={loading} style={{ marginTop: 20, width: '100%' }}>
+            {loading ? 'AI 正在拆解计划…' : '生成计划'}
+          </button>
+        </form>
 
-      <GoalList
-        goals={goals}
-        onDelete={async (id) => {
-          try {
-            await api.deleteGoal(id)
-            void loadGoals()
-          } catch (e) {
-            setError(e instanceof Error ? e.message : '删除失败')
-          }
-        }}
-      />
-    </div>
+        <GoalList
+          goals={goals}
+          onDelete={async (id) => {
+            try {
+              await api.deleteGoal(id)
+              void loadGoals()
+            } catch (e) {
+              setError(e instanceof Error ? e.message : '删除失败')
+            }
+          }}
+        />
+      </div>
+    </>
   )
 }

@@ -1,0 +1,25 @@
+import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { IconArrowLeft, IconTarget } from './icons'
+
+export function TopBar({
+  title, backTo, actions,
+}: { title?: string; backTo?: string; actions?: ReactNode }) {
+  return (
+    <nav className="topbar">
+      <Link to="/" className="topbar-brand">
+        <IconTarget size={18} />
+        <span>PlanAgent</span>
+      </Link>
+      {title && <span className="topbar-title">{title}</span>}
+      <div className="topbar-spacer" />
+      {backTo && (
+        <Link to={backTo} className="btn-ghost">
+          <IconArrowLeft size={14} />
+          返回
+        </Link>
+      )}
+      {actions}
+    </nav>
+  )
+}

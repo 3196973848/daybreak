@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type {
   DeliverContentDTO, TaskDTO, TestContentDTO, VerificationResult,
 } from '../types'
+import { IconX } from './icons'
 
 export function VerificationModal({
   task, onClose, onVerified,
@@ -51,7 +52,7 @@ export function VerificationModal({
       <div className="card" style={{ padding: 20, width: 460, maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <strong>检验 · {task.title}</strong>
-          <button className="btn-ghost" onClick={onClose}>✕</button>
+          <button className="btn-ghost btn-icon" onClick={onClose} aria-label="关闭"><IconX size={14} /></button>
         </div>
         <p className="faint" style={{ fontSize: 12, margin: '6px 0 14px' }}>
           {mode === 'test' ? '测试模式 · 答对 70% 即通过' : '交付模式 · 提交成果描述，评审是否达标'}

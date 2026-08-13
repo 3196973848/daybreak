@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GoalDTO, TaskDTO } from '../types'
 import { Calendar } from '../components/Calendar'
 import { VerificationModal } from '../components/VerificationModal'
+import { TopBar } from '../components/TopBar'
+import { IconCheck, IconClipboard } from '../components/icons'
 import { todayLocal } from '../utils/date'
 
 const TYPE_TEXT: Record<string, string> = { learn: '学习', practice: '实操', project: '项目' }
@@ -55,72 +57,74 @@ export function DailyTasks() {
   if (!goal) return <p className="faint">加载中…</p>
   if (!goal.plan) {
     return (
-      <div style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>
-        <Link to={`/goals/${goal.id}`} className="btn-ghost">‹ 返回总览</Link>
-        <p style={{ color: '#f87171', marginTop: 16 }}>此目标未生成计划。</p>
-      </div>
+      <>
+        <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
+        <div className="page page-narrow">
+          <p className="error-text">此目标未生成计划。</p>
+        </div>
+      </>
     )
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '40px auto', padding: '0 16px' }}>
-      <Link to={`/goals/${goal.id}`} className="btn-ghost">‹ 返回总览</Link>
-      <h1 style={{ fontSize: 22 }}>{goal.title}</h1>
-      {error && <p style={{ color: '#f87171', fontSize: 13, marginTop: 8 }}>{error}</p>}
+    <>
+      <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
+      <div className="page">
+        <h1 style={{ fontSize: 22, margin: '0 0 4px' }}>{goal.title}</h1>
+        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginTop: 16, flexWrap: 'wrap' }}>
-        <div className="card" style={{ padding: 16, flex: 1, minWidth: 300 }}>
-          <div style={{ textAlign: 'center', marginBottom: 12 }}>
-            <div style={{ fontWeight: 600 }}>{selected}</div>
-            <div className="faint" style={{ fontSize: 12 }}>点击任务左侧圆点可勾选完成</div>
-          </div>
-          {dayTasks.length === 0 && <p className="faint" style={{ textAlign: 'center' }}>这一天没有任务</p>}
-          {dayTasks.map((t) => (
-            <div key={t.id} className="card" style={{ padding: '10px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                onClick={() => void toggle(t)}
-                style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
-                  background: t.status === 'done' ? 'var(--accent)' : 'transparent',
-                  border: `2px solid ${t.status === 'done' ? 'var(--accent)' : 'var(--text-faint)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, color: '#000',
-                }}
-              >
-                {t.status === 'done' ? '✓' : ''}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
-                  {t.title}
-                </div>
-                <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
-                  {TYPE_TEXT[t.type] ?? t.type} · 约 {t.effort} 小时
-                  {t.verified ? ' · 已验证' : ''}
-                </div>
-              </div>
-              <button className="btn-ghost" onClick={() => setVerifyTask(t)}>去检验</button>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginTop: 16, flexWrap: 'wrap' }}>
+          <div className="card" style={{ padding: 16, flex: 1, minWidth: 300 }}>
+            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600 }}>{selected}</div>
+              <div className="faint" style={{ fontSize: 12 }}>点击任务左侧圆点可勾选完成</div>
             </div>
-          ))}
+            {dayTasks.length === 0 && <p className="faint" style={{ textAlign: 'center' }}>这一天没有任务</p>}
+            {dayTasks.map((t) => (
+              <div key={t.id} className="card row-hover" style={{ padding: '10px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  className={`circle-dot ${t.status === 'done' ? 'done' : ''}`}
+                  onClick={() => void toggle(t)}
+                  aria-label={t.status === 'done' ? '标记未完成' : '标记完成'}
+                >
+                  {t.status === 'done' && <IconCheck size={12} />}
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
+                    {t.title}
+                  </div>
+                  <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
+                    {TYPE_TEXT[t.type] ?? t.type} · 约 {t.effort} 小时
+                    {t.verified ? ' · 已验证' : ''}
+                  </div>
+                </div>
+                <button className="btn-ghost" onClick={() => setVerifyTask(t)}>
+                  <IconClipboard size={14} />
+                  检验
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <Calendar
+            year={Number(selected.slice(0, 4))}
+            month={Number(selected.slice(5, 7)) - 1}
+            selected={selected}
+            datesWithTasks={datesWithTasks}
+            onSelect={setSelected}
+          />
         </div>
 
-        <Calendar
-          year={Number(selected.slice(0, 4))}
-          month={Number(selected.slice(5, 7)) - 1}
-          selected={selected}
-          datesWithTasks={datesWithTasks}
-          onSelect={setSelected}
-        />
+        {verifyTask && (
+          <VerificationModal
+            task={verifyTask}
+            onClose={() => setVerifyTask(null)}
+            onVerified={() => {
+              if (id) api.getGoal(Number(id)).then(setGoal).catch(() => undefined)
+            }}
+          />
+        )}
       </div>
-
-      {verifyTask && (
-        <VerificationModal
-          task={verifyTask}
-          onClose={() => setVerifyTask(null)}
-          onVerified={() => {
-            if (id) api.getGoal(Number(id)).then(setGoal).catch(() => undefined)
-          }}
-        />
-      )}
-    </div>
+    </>
   )
 }
