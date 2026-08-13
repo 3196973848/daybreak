@@ -8,14 +8,31 @@ from .schema import PlanSpec
 
 PLANNER_SYSTEM_PROMPT = """你是一个目标规划专家。用户给出一个目标，你要把它拆解成一份完整计划。
 
-输出结构：
-- strategy：一句话总体策略
-- milestones：3-6 个阶段性小目标，按 order 排序；target_date_offset_days 为该里程碑相对计划开始日的天数偏移
-- 每个 milestone 有 3-10 个 tasks，按学习顺序串行（先基础后进阶）
+输出 JSON，严格遵循以下结构（每个字段都要有）：
+{
+  "strategy": "一句话总体策略",
+  "milestones": [
+    {
+      "title": "里程碑标题",
+      "description": "阶段目标说明",
+      "order": 1,
+      "target_date_offset_days": 14,
+      "tasks": [
+        {
+          "title": "任务标题",
+          "description": "具体可执行的任务内容",
+          "type": "learn",
+          "effort_hours": 1.0
+        }
+      ]
+    }
+  ]
+}
 
-任务规则：
-- 每个 task 有 type，取值 learn(学习)/practice(实操)/project(项目)
-- effort_hours 为预估工时：学习 0.5-2，实操 1-4，项目 2-8
+规则：
+- 3-6 个里程碑，按 order 排序，target_date_offset_days 为相对计划开始日的天数偏移
+- 每个里程碑 3-10 个任务，按学习顺序串行
+- type 取值 learn(学习)/practice(实操)/project(项目)；effort_hours 学习0.5-2、实操1-4、项目2-8
 - 描述用中文，具体可执行
 - 只输出 JSON，不要输出任何其它文字或 markdown"""
 
