@@ -86,6 +86,42 @@ def test_legacy_target_date_also_uses_uniform_schedule(db_session, monkeypatch):
     ]
 
 
+def test_deadline_empty_milestones_inherit_previous_nonempty_due_or_start(
+    db_session, monkeypatch
+):
+    spec = PlanSpec(
+        strategy="均匀学习",
+        milestones=[
+            MilestoneSpec(title="前置空阶段", order=1, tasks=[]),
+            MilestoneSpec(
+                title="阶段一",
+                order=2,
+                tasks=[TaskSpec(title="任务一")],
+            ),
+            MilestoneSpec(title="中间空阶段", order=3, tasks=[]),
+            MilestoneSpec(
+                title="阶段二",
+                order=4,
+                tasks=[TaskSpec(title="任务二")],
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        "app.services.planner_service.generate_plan", lambda *a, **k: spec
+    )
+    start = date.today()
+    target = start + timedelta(days=8)
+
+    goal = create_goal_with_plan(db_session, "目标", target_date=target)
+
+    assert [milestone.due_date for milestone in goal.plan.milestones] == [
+        start,
+        start,
+        start,
+        target,
+    ]
+
+
 def test_initial_goal_flush_failure_rolls_back_and_leaves_session_usable(
     db_session, monkeypatch
 ):
