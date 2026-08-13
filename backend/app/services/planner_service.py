@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -51,12 +51,18 @@ def create_goal_with_plan(
         plan = Plan(goal_id=goal.id, strategy=spec.strategy, status="active")
         db.add(plan)
         db.flush()
+        previous_nonempty_due = start
         for mi, ms in enumerate(spec.milestones):
             if target_date is not None:
                 milestone_dates = dates_by_milestone[mi]
                 due = milestone_dates[-1] if milestone_dates else target_date
             else:
-                due = start + timedelta(days=ms.target_date_offset_days)
+                milestone_dates = dates_by_milestone[mi]
+                if milestone_dates:
+                    due = milestone_dates[-1]
+                    previous_nonempty_due = due
+                else:
+                    due = previous_nonempty_due
             milestone = Milestone(
                 plan_id=plan.id, title=ms.title, description=ms.description,
                 order=ms.order, due_date=due, status="todo",

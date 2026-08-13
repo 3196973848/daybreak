@@ -4,13 +4,13 @@ import pytest
 
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 from app.scheduler.duration import calculate_target_date
-from app.scheduler.scheduler import schedule
+from app.scheduler.scheduler import group_tasks, schedule
 
 
 def _plan(*tasks):
     return PlanSpec(
         strategy="s",
-        milestones=[MilestoneSpec(title="M", order=1, target_date_offset_days=7, tasks=list(tasks))],
+        milestones=[MilestoneSpec(title="M", order=1, tasks=list(tasks))],
     )
 
 
@@ -36,9 +36,9 @@ def test_respects_milestone_order_and_index():
     plan = PlanSpec(
         strategy="s",
         milestones=[
-            MilestoneSpec(title="M1", order=1, target_date_offset_days=3,
+            MilestoneSpec(title="M1", order=1,
                           tasks=[TaskSpec(title="m1t", type="learn", effort_hours=1.0)]),
-            MilestoneSpec(title="M2", order=2, target_date_offset_days=7,
+            MilestoneSpec(title="M2", order=2,
                           tasks=[TaskSpec(title="m2t", type="learn", effort_hours=1.0)]),
         ],
     )
@@ -120,9 +120,104 @@ def test_uniform_schedule_empty_plan_returns_empty():
 
 
 def test_uniform_schedule_rejects_deadline_before_start():
-    with pytest.raises(ValueError, match="target_date 涓嶈兘鏃╀簬璁″垝寮€濮嬫棩"):
+    with pytest.raises(ValueError, match="target_date"):
         schedule(
             _plan(TaskSpec(title="a")),
             date(2026, 8, 13),
             end_date=date(2026, 8, 12),
         )
+
+
+def test_group_tasks_packs_atomic_tasks_in_order_within_daily_budget():
+    plan = _plan(
+        TaskSpec(title="a", description="x", effort_hours=0.5),
+        TaskSpec(title="b", description="x", effort_hours=1.5),
+        TaskSpec(title="c", description="x", effort_hours=1.0),
+        TaskSpec(title="d", description="x", effort_hours=1.0),
+    )
+
+    assert group_tasks(plan, daily_hours=2.0) == [
+        [(0, 0), (0, 1)],
+        [(0, 2), (0, 3)],
+    ]
+
+
+def test_capacity_groups_multiple_atomic_tasks_on_one_day_and_spans_deadline():
+    plan = _plan(
+        TaskSpec(title="a", description="x", effort_hours=0.5),
+        TaskSpec(title="b", description="x", effort_hours=1.5),
+        TaskSpec(title="c", description="x", effort_hours=1.0),
+        TaskSpec(title="d", description="x", effort_hours=1.0),
+    )
+    result = schedule(
+        plan,
+        date(2026, 8, 14),
+        end_date=date(2026, 8, 16),
+        daily_hours=2.0,
+    )
+
+    assert [item.date for item in result] == [
+        date(2026, 8, 14), date(2026, 8, 14),
+        date(2026, 8, 16), date(2026, 8, 16),
+    ]
+    effort_by_date = {}
+    for item in result:
+        effort_by_date.setdefault(item.date, 0.0)
+        effort_by_date[item.date] += plan.milestones[item.milestone_index].tasks[
+            item.task_index
+        ].effort_hours
+    assert all(effort <= 2.0 for effort in effort_by_date.values())
+
+
+def test_capacity_grouping_rejects_fragmentation_that_needs_more_days():
+    plan = _plan(*[
+        TaskSpec(title=str(i), description="x", effort_hours=effort)
+        for i, effort in enumerate([1.5, 1.5, 1.0])
+    ])
+
+    with pytest.raises(ValueError, match="3 个自然日"):
+        schedule(
+            plan,
+            date(2026, 8, 13),
+            end_date=date(2026, 8, 14),
+            daily_hours=2.0,
+        )
+
+
+def test_capacity_schedule_preserves_flattened_order_across_milestones():
+    plan = PlanSpec(
+        strategy="s",
+        milestones=[
+            MilestoneSpec(
+                title="M1",
+                order=1,
+                tasks=[TaskSpec(title="a", description="x", effort_hours=1.5)],
+            ),
+            MilestoneSpec(
+                title="M2",
+                order=2,
+                tasks=[
+                    TaskSpec(title="b", description="x", effort_hours=0.5),
+                    TaskSpec(title="c", description="x", effort_hours=1.0),
+                ],
+            ),
+        ],
+    )
+
+    result = schedule(
+        plan,
+        date(2026, 8, 14),
+        end_date=date(2026, 8, 16),
+        daily_hours=2.0,
+    )
+
+    assert [(item.milestone_index, item.task_index) for item in result] == [
+        (0, 0),
+        (1, 0),
+        (1, 1),
+    ]
+    assert [item.date for item in result] == [
+        date(2026, 8, 14),
+        date(2026, 8, 14),
+        date(2026, 8, 16),
+    ]

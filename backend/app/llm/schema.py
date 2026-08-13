@@ -14,7 +14,6 @@ class MilestoneSpec(BaseModel):
     title: str
     description: str = ""
     order: int = 0
-    target_date_offset_days: int = Field(default=7, ge=1)
     tasks: List[TaskSpec]
 
 

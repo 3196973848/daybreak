@@ -10,13 +10,16 @@ from app.services.planner_service import create_goal_with_plan
 def _fake_spec():
     return PlanSpec(
         strategy="策略",
-        milestones=[MilestoneSpec(
-            title="里程碑1", order=1, target_date_offset_days=7,
-            tasks=[
-                TaskSpec(title="任务1", type="learn", effort_hours=1.0),
-                TaskSpec(title="任务2", type="practice", effort_hours=2.0),
-            ],
-        )],
+        milestones=[
+            MilestoneSpec(
+                title="里程碑1", order=1,
+                tasks=[
+                    TaskSpec(title="任务1", type="learn", effort_hours=1.0),
+                    TaskSpec(title="任务2", type="practice", effort_hours=2.0),
+                ],
+            ),
+            MilestoneSpec(title="空里程碑", order=2, tasks=[]),
+        ],
     )
 
 
@@ -27,19 +30,16 @@ def _three_task_spec():
             MilestoneSpec(
                 title="阶段一",
                 order=1,
-                target_date_offset_days=2,
                 tasks=[TaskSpec(title="任务1"), TaskSpec(title="任务2")],
             ),
             MilestoneSpec(
                 title="阶段二",
                 order=2,
-                target_date_offset_days=4,
                 tasks=[TaskSpec(title="任务3")],
             ),
             MilestoneSpec(
                 title="空阶段",
                 order=3,
-                target_date_offset_days=6,
                 tasks=[],
             ),
         ],
@@ -121,8 +121,9 @@ def test_create_goal_persists_full_tree(db_session, monkeypatch):
     assert goal.plan is not None
     ms = goal.plan.milestones[0]
     assert ms.title == "里程碑1"
-    assert ms.due_date == date.today() + timedelta(days=7)
+    assert ms.due_date == date.today() + timedelta(days=1)
     assert len(ms.tasks) == 2
     assert ms.tasks[0].scheduled_date == date.today()
     assert ms.tasks[1].scheduled_date == date.today() + timedelta(days=1)
     assert ms.tasks[1].verified is False
+    assert goal.plan.milestones[1].due_date == ms.due_date
