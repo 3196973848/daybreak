@@ -6,11 +6,13 @@ from pydantic import ValidationError
 from app.llm.verifier import (
     DeliverContent,
     GradeResult,
+    ShortGradeResult,
     TestContent,
     generate_deliver_criteria,
     generate_test,
     grade_delivery,
-    grade_test,
+    grade_short_answers,
+    score_test,
 )
 
 
@@ -127,10 +129,75 @@ def test_test_content_rejects_invalid_private_question_fields():
         TestContent.model_validate(payload)
 
 
-def test_grade_test_passed_threshold():
-    grade = GradeResult(score=0.9, feedback="很好")
-    got = grade_test("任务", "内容", TestContent.model_validate(quiz_payload()), {"1": "a"}, client=FakeClient(grade))
-    assert got.score >= 0.7
+def test_score_test_combines_seven_exact_choices_and_three_short_scores():
+    content = TestContent.model_validate(quiz_payload())
+    answers = {str(i): "A" for i in range(1, 8)} | {"8": "answer", "9": "answer", "10": "answer"}
+    short = ShortGradeResult(items=[
+        {"id": 8, "score": 10, "feedback": "complete"},
+        {"id": 9, "score": 5, "feedback": "partly correct"},
+        {"id": 10, "score": 0, "feedback": "not answered"},
+    ])
+    result = score_test(content, answers, short)
+    assert result.points == 85
+    assert result.score == 0.85
+    assert result.details[0].correct is True
+    assert result.details[0].correct_answer == "A"
+    assert result.details[7].points == 10
+
+
+def test_score_test_gives_zero_for_missing_or_wrong_choice_answers():
+    content = TestContent.model_validate(quiz_payload())
+    short = ShortGradeResult(items=[
+        {"id": 8, "score": 0, "feedback": ""},
+        {"id": 9, "score": 0, "feedback": ""},
+        {"id": 10, "score": 0, "feedback": ""},
+    ])
+    result = score_test(content, {"1": "B"}, short)
+    assert result.points == 0
+    assert result.details[0].correct is False
+    assert result.details[1].points == 0
+
+
+def test_short_grade_requires_exact_short_question_ids():
+    with pytest.raises(ValidationError):
+        ShortGradeResult(items=[{"id": 8, "score": 10, "feedback": "x"}])
+
+
+def test_short_grade_rejects_scores_outside_zero_to_ten():
+    with pytest.raises(ValidationError):
+        ShortGradeResult(items=[
+            {"id": 8, "score": 11, "feedback": "x"},
+            {"id": 9, "score": 0, "feedback": "x"},
+            {"id": 10, "score": 0, "feedback": "x"},
+        ])
+
+
+def test_grade_short_answers_sends_only_short_questions_to_llm():
+    grade = ShortGradeResult(items=[
+        {"id": 8, "score": 10, "feedback": "x"},
+        {"id": 9, "score": 5, "feedback": "y"},
+        {"id": 10, "score": 0, "feedback": "z"},
+    ])
+    client = SequentialClient([grade.model_dump()])
+    got = grade_short_answers(
+        "task", "description", TestContent.model_validate(quiz_payload()),
+        {"1": "B", "8": "short 8", "9": "short 9", "10": "short 10"}, client=client,
+    )
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    short_questions = json.loads(user_prompt)["简答题"]
+    assert [item.id for item in got.items] == [8, 9, 10]
+    assert [item["id"] for item in short_questions] == [8, 9, 10]
+    assert [item["user_answer"] for item in short_questions] == ["short 8", "short 9", "short 10"]
+
+
+def test_grade_short_answers_fails_after_three_invalid_results():
+    invalid = {"items": [{"id": 8, "score": 10, "feedback": "x"}]}
+    client = SequentialClient([invalid, invalid, invalid])
+    with pytest.raises(RuntimeError):
+        grade_short_answers(
+            "task", "description", TestContent.model_validate(quiz_payload()), {}, client=client
+        )
+    assert len(client.completions.calls) == 3
 
 
 def test_generate_deliver_criteria():

@@ -61,12 +61,44 @@ class GradeResult(BaseModel):
     feedback: str
 
 
+class ShortQuestionGrade(BaseModel):
+    id: int
+    score: float = Field(ge=0, le=10)
+    feedback: str
+
+
+class ShortGradeResult(BaseModel):
+    items: list[ShortQuestionGrade]
+
+    @model_validator(mode="after")
+    def validate_ids(self):
+        if [item.id for item in self.items] != [8, 9, 10]:
+            raise ValueError("简答评分必须依次包含题目 8、9、10")
+        return self
+
+
+class QuizQuestionResult(BaseModel):
+    id: int
+    type: Literal["choice", "short"]
+    points: float
+    correct: bool | None = None
+    correct_answer: str | None = None
+    feedback: str = ""
+
+
+class QuizScore(BaseModel):
+    points: float
+    score: float
+    feedback: str
+    details: list[QuizQuestionResult]
+
+
 TEST_GENERATE_PROMPT = """你是学习测试出题助手。基于学习任务内容生成恰好 10 道检验题：前 7 道为选择题，后 3 道为简答题。
 只输出 JSON，不输出其它内容。选择题必须包含 id、type="choice"、text、恰好 4 个 options、且 correct_answer 必须是 options 之一；reference_answer 必须为 null，rubric_points 必须为 []。简答题必须包含 id、type="short"、text、options=[]、correct_answer=null、非空 reference_answer、以及非空 rubric_points。题目 id 必须依次为 1 到 10。
 输出格式：{"questions": [{"id": 1, "type": "choice", "text": "...", "options": ["a", "b", "c", "d"], "correct_answer": "a", "reference_answer": null, "rubric_points": []}, {"id": 8, "type": "short", "text": "...", "options": [], "correct_answer": null, "reference_answer": "...", "rubric_points": ["..."]}]}"""
 
-GRADE_TEST_PROMPT = """你是严格但公平的评分老师。依据学习任务内容与题目，判断用户答案正确率。
-只输出 JSON：{"score": 0-1(正确率), "feedback": "中文评语"}。"""
+SHORT_GRADE_PROMPT = """你是严格但公平的简答题评分老师。只根据每道题的参考答案和评分点评分。
+必须只输出 JSON，items 必须依次且恰好包含题目 ID 8、9、10，每题 score 必须在 0 到 10 之间，并给出 feedback。输出格式：{"items": [{"id": 8, "score": 0, "feedback": "中文评语"}, {"id": 9, "score": 0, "feedback": "中文评语"}, {"id": 10, "score": 0, "feedback": "中文评语"}]}"""
 
 DELIVER_GENERATE_PROMPT = """你是交付验收设计者。为实操/项目任务写 2-5 条明确、可检验的验收标准。
 只输出 JSON：{"acceptance_criteria": "标准文本"}。"""
@@ -135,20 +167,73 @@ def generate_test(
     raise RuntimeError(f"生成 10 道检验题失败：{'；'.join(errors)}")
 
 
-def grade_test(
-    task_title: str, task_description: str, content: TestContent, answers: dict, client=None
-) -> GradeResult:
-    payload = {
-        "任务": task_title,
-        "内容": task_description or "无",
-        "题目": [q.model_dump() for q in content.questions],
-        "用户答案": answers,
-    }
-    return _parse(
-        client, GRADE_TEST_PROMPT,
-        json.dumps(payload, ensure_ascii=False),
-        GradeResult,
-    )
+def grade_short_answers(
+    task_title: str,
+    task_description: str,
+    content: TestContent,
+    answers: dict[str, str],
+    client=None,
+) -> ShortGradeResult:
+    short_questions = [
+        {
+            "id": q.id,
+            "text": q.text,
+            "reference_answer": q.reference_answer,
+            "rubric_points": q.rubric_points,
+            "user_answer": answers.get(str(q.id), ""),
+        }
+        for q in content.questions
+        if q.type == "short"
+    ]
+    errors = []
+    for _attempt in range(3):
+        try:
+            return _parse(
+                client,
+                SHORT_GRADE_PROMPT,
+                json.dumps(
+                    {"任务": task_title, "内容": task_description, "简答题": short_questions},
+                    ensure_ascii=False,
+                ),
+                ShortGradeResult,
+            )
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    raise RuntimeError(f"简答题评分失败：{'；'.join(errors)}")
+
+
+def score_test(
+    content: TestContent,
+    answers: dict[str, str],
+    short_grade: ShortGradeResult,
+) -> QuizScore:
+    short_by_id = {item.id: item for item in short_grade.items}
+    details = []
+    for question in content.questions:
+        if question.type == "choice":
+            correct = answers.get(str(question.id)) == question.correct_answer
+            details.append(
+                QuizQuestionResult(
+                    id=question.id,
+                    type="choice",
+                    points=10 if correct else 0,
+                    correct=correct,
+                    correct_answer=question.correct_answer,
+                )
+            )
+        else:
+            grade = short_by_id[question.id]
+            details.append(
+                QuizQuestionResult(
+                    id=question.id,
+                    type="short",
+                    points=grade.score,
+                    feedback=grade.feedback,
+                )
+            )
+    points = round(sum(item.points for item in details), 1)
+    feedback = "\n".join(item.feedback for item in details if item.feedback)
+    return QuizScore(points=points, score=points / 100, feedback=feedback, details=details)
 
 
 def generate_deliver_criteria(task_title: str, task_description: str, client=None) -> DeliverContent:
