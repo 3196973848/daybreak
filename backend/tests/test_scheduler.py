@@ -1,6 +1,9 @@
 from datetime import date
 
+import pytest
+
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
+from app.scheduler.duration import calculate_target_date
 from app.scheduler.scheduler import schedule
 
 
@@ -44,3 +47,75 @@ def test_respects_milestone_order_and_index():
         (0, 0, date(2026, 8, 13)),
         (1, 0, date(2026, 8, 13)),
     ]
+
+
+@pytest.mark.parametrize(
+    ("start", "value", "unit", "expected"),
+    [
+        (date(2026, 8, 13), 10, "day", date(2026, 8, 23)),
+        (date(2026, 8, 13), 2, "week", date(2026, 8, 27)),
+        (date(2026, 1, 31), 1, "month", date(2026, 2, 28)),
+        (date(2024, 1, 31), 1, "month", date(2024, 2, 29)),
+        (date(2026, 11, 30), 3, "month", date(2027, 2, 28)),
+    ],
+)
+def test_calculate_target_date(start, value, unit, expected):
+    assert calculate_target_date(start, value, unit) == expected
+
+
+def test_calculate_target_date_rejects_non_positive_value():
+    with pytest.raises(ValueError, match="duration_value 蹇呴』涓烘鏁存暟"):
+        calculate_target_date(date(2026, 8, 13), 0, "day")
+
+
+def test_uniform_schedule_spans_start_through_deadline_including_weekend():
+    plan = _plan(
+        TaskSpec(title="a"),
+        TaskSpec(title="b"),
+        TaskSpec(title="c"),
+    )
+    result = schedule(
+        plan,
+        date(2026, 8, 14),  # Friday
+        end_date=date(2026, 8, 16),  # Sunday
+    )
+    assert [item.date for item in result] == [
+        date(2026, 8, 14),
+        date(2026, 8, 15),
+        date(2026, 8, 16),
+    ]
+
+
+def test_uniform_schedule_allows_multiple_tasks_on_same_day():
+    plan = _plan(*(TaskSpec(title=str(i)) for i in range(5)))
+    result = schedule(plan, date(2026, 8, 13), end_date=date(2026, 8, 15))
+    assert [item.date for item in result] == [
+        date(2026, 8, 13),
+        date(2026, 8, 13),
+        date(2026, 8, 14),
+        date(2026, 8, 15),
+        date(2026, 8, 15),
+    ]
+
+
+def test_uniform_schedule_single_task_starts_today():
+    result = schedule(
+        _plan(TaskSpec(title="only")),
+        date(2026, 8, 13),
+        end_date=date(2026, 9, 13),
+    )
+    assert [item.date for item in result] == [date(2026, 8, 13)]
+
+
+def test_uniform_schedule_empty_plan_returns_empty():
+    plan = PlanSpec(strategy="s", milestones=[])
+    assert schedule(plan, date(2026, 8, 13), end_date=date(2026, 9, 13)) == []
+
+
+def test_uniform_schedule_rejects_deadline_before_start():
+    with pytest.raises(ValueError, match="target_date 涓嶈兘鏃╀簬璁″垝寮€濮嬫棩"):
+        schedule(
+            _plan(TaskSpec(title="a")),
+            date(2026, 8, 13),
+            end_date=date(2026, 8, 12),
+        )
