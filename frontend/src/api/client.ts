@@ -4,17 +4,33 @@ import type {
 
 const BASE = '/api'
 
+export class ApiError extends Error {
+  constructor(public status: number, public detail: unknown) {
+    super(typeof detail === 'string' ? detail : '请求失败')
+  }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
-  if (!res.ok) {
-    let detail = res.statusText
-    try { detail = (await res.json()).detail || detail } catch { /* keep default */ }
-    throw new Error(detail)
+  let payload: unknown
+  try {
+    payload = await res.json()
+  } catch (error) {
+    if (!res.ok) throw new ApiError(res.status, res.statusText)
+    throw error
   }
-  return res.json() as Promise<T>
+  if (!res.ok) {
+    const detail = typeof payload === 'object'
+      && payload !== null
+      && 'detail' in payload
+      ? payload.detail ?? res.statusText
+      : res.statusText
+    throw new ApiError(res.status, detail)
+  }
+  return payload as T
 }
 
 export type DurationUnit = 'day' | 'week' | 'month'
@@ -24,6 +40,7 @@ export interface CreateGoalInput {
   description?: string
   duration_value: number
   duration_unit: DurationUnit
+  daily_hours: number
 }
 
 export const api = {
