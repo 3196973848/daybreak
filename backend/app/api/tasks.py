@@ -89,8 +89,9 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
             submission="", result="", passed=False,
         )
         db.add(record)
-        db.commit()
+        db.flush()
         db.refresh(record)
+        db.commit()
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=502, detail=f"检验题生成失败：{exc}") from exc
@@ -136,14 +137,21 @@ def submit_verification(
             db.rollback()
             raise HTTPException(status_code=502, detail=f"交付评分失败：{exc}") from exc
 
-    passed = grade_score >= PASS_THRESHOLD
-    record.passed = passed
-    if passed:
-        task.verified = True
-        task.status = "done"
-        task.completed_at = task.completed_at or datetime.now()
-        _refresh_milestone(task.milestone)
-    db.commit()
+    try:
+        passed = grade_score >= PASS_THRESHOLD
+        record.passed = passed
+        if passed:
+            task.verified = True
+            task.status = "done"
+            task.completed_at = task.completed_at or datetime.now()
+            _refresh_milestone(task.milestone)
+        db.flush()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        if record.mode == "test":
+            raise HTTPException(status_code=502, detail=f"检验题评分失败：{exc}") from exc
+        raise HTTPException(status_code=502, detail=f"交付评分失败：{exc}") from exc
     response = {
         "passed": passed,
         "score": grade_score,

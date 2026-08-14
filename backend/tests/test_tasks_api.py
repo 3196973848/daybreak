@@ -199,6 +199,111 @@ def test_start_verification_generation_failure_rolls_back(client, db_session, mo
     assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 0
 
 
+def test_start_verification_refresh_failure_rolls_back_without_record(
+    client, db_session, monkeypatch
+):
+    task = _build_task(db_session, "learn")
+    monkeypatch.setattr(
+        "app.api.tasks.generate_test", lambda *args, **kwargs: _quiz_content()
+    )
+    rollback_calls = []
+    original_refresh = db_session.refresh
+    original_rollback = db_session.rollback
+
+    def fail_record_refresh(instance, *args, **kwargs):
+        if isinstance(instance, VerificationRecord):
+            raise RuntimeError("refresh failed")
+        return original_refresh(instance, *args, **kwargs)
+
+    def rollback():
+        rollback_calls.append(True)
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "refresh", fail_record_refresh)
+    monkeypatch.setattr(db_session, "rollback", rollback)
+
+    response = client.get(f"/api/tasks/{task.id}/verification")
+
+    assert response.status_code == 502
+    assert "refresh failed" in response.json()["detail"]
+    assert rollback_calls == [True]
+    assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 0
+
+    monkeypatch.setattr(db_session, "refresh", original_refresh)
+    recovered = VerificationRecord(
+        task_id=task.id,
+        mode="test",
+        content=_quiz_content().model_dump_json(),
+        submission="",
+        result="",
+        passed=False,
+    )
+    db_session.add(recovered)
+    db_session.commit()
+    assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 1
+
+
+def test_verification_submission_commit_failure_rolls_back_prior_state(
+    client, db_session, monkeypatch
+):
+    task = _build_task(db_session, "learn")
+    monkeypatch.setattr(
+        "app.api.tasks.generate_test", lambda *args, **kwargs: _quiz_content()
+    )
+    monkeypatch.setattr(
+        "app.api.tasks.grade_short_answers",
+        lambda *args, **kwargs: _short_grade(10, 10, 10),
+    )
+    start = client.get(f"/api/tasks/{task.id}/verification").json()
+    rollback_calls = []
+    original_commit = db_session.commit
+    original_rollback = db_session.rollback
+
+    def fail_commit():
+        raise RuntimeError("commit failed")
+
+    def rollback():
+        rollback_calls.append(True)
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback)
+
+    response = client.post(
+        f"/api/tasks/{task.id}/verification",
+        json={
+            "record_id": start["record_id"],
+            "answers": {str(i): "A" for i in range(1, 8)},
+        },
+    )
+
+    assert response.status_code == 502
+    assert "commit failed" in response.json()["detail"]
+    assert rollback_calls == [True]
+    record = db_session.get(VerificationRecord, start["record_id"])
+    db_session.refresh(task)
+    assert record.submission == ""
+    assert record.result == ""
+    assert record.passed is False
+    assert task.verified is False
+    assert task.status == "todo"
+    assert task.completed_at is None
+    assert task.milestone.status == "todo"
+
+    monkeypatch.setattr(db_session, "commit", original_commit)
+    recovered = VerificationRecord(
+        task_id=task.id,
+        mode="test",
+        content=_quiz_content().model_dump_json(),
+        submission="",
+        result="",
+        passed=False,
+    )
+    db_session.add(recovered)
+    db_session.commit()
+    assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 2
+
+
 def test_verification_deliver_flow(client, db_session, monkeypatch):
     task = _build_task(db_session, "project")
 
