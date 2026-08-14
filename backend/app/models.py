@@ -1,6 +1,16 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -67,6 +77,48 @@ class Task(Base):
     verifications: Mapped[list["VerificationRecord"]] = relationship(
         back_populates="task", cascade="all, delete-orphan"
     )
+    learning_session: Mapped["LearningSession"] = relationship(
+        back_populates="task", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class LearningSession(Base):
+    __tablename__ = "learning_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), unique=True)
+    stage: Mapped[str] = mapped_column(String(20), default="diagnose")
+    session_summary: Mapped[str] = mapped_column(Text, default="")
+    covered_points: Mapped[str] = mapped_column(Text, default="[]")
+    weak_points: Mapped[str] = mapped_column(Text, default="[]")
+    ready_for_verification: Mapped[bool] = mapped_column(Boolean, default=False)
+    estimated_hours_snapshot: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, onupdate=datetime.now
+    )
+    task: Mapped["Task"] = relationship(back_populates="learning_session")
+    turns: Mapped[list["LearningTurn"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="LearningTurn.id",
+    )
+
+
+class LearningTurn(Base):
+    __tablename__ = "learning_turns"
+    __table_args__ = (
+        UniqueConstraint("session_id", "client_turn_id", name="uq_learning_turn_client"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("learning_sessions.id"))
+    client_turn_id: Mapped[str] = mapped_column(String(64))
+    user_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assistant_message: Mapped[str] = mapped_column(Text)
+    stage: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    session: Mapped[LearningSession] = relationship(back_populates="turns")
 
 
 class VerificationRecord(Base):
