@@ -190,12 +190,58 @@ def test_grade_short_answers_sends_only_short_questions_to_llm():
     assert [item["user_answer"] for item in short_questions] == ["short 8", "short 9", "short 10"]
 
 
+def test_grade_short_answers_omits_blank_answers_and_preserves_zero_detail_rows():
+    partial_grade = {
+        "items": [{"id": 9, "score": 7, "feedback": "partly correct"}],
+    }
+    client = SequentialClient([partial_grade, partial_grade, partial_grade])
+
+    got = grade_short_answers(
+        "task",
+        "description",
+        TestContent.model_validate(quiz_payload()),
+        {"8": "", "9": "substantive answer", "10": "  \t"},
+        client=client,
+    )
+
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    sent_questions = json.loads(user_prompt)["简答题"]
+    assert [question["id"] for question in sent_questions] == [9]
+    assert [(item.id, item.score) for item in got.items] == [(8, 0), (9, 7), (10, 0)]
+    assert len(client.completions.calls) == 1
+
+
+def test_grade_short_answers_skips_model_when_all_short_answers_are_blank():
+    client = SequentialClient([{
+        "items": [
+            {"id": 8, "score": 10, "feedback": "x"},
+            {"id": 9, "score": 10, "feedback": "y"},
+            {"id": 10, "score": 10, "feedback": "z"},
+        ],
+    }])
+
+    got = grade_short_answers(
+        "task",
+        "description",
+        TestContent.model_validate(quiz_payload()),
+        {"8": "", "9": "  ", "10": "\n"},
+        client=client,
+    )
+
+    assert [(item.id, item.score) for item in got.items] == [(8, 0), (9, 0), (10, 0)]
+    assert client.completions.calls == []
+
+
 def test_grade_short_answers_fails_after_three_invalid_results():
     invalid = {"items": [{"id": 8, "score": 10, "feedback": "x"}]}
     client = SequentialClient([invalid, invalid, invalid])
     with pytest.raises(RuntimeError):
         grade_short_answers(
-            "task", "description", TestContent.model_validate(quiz_payload()), {}, client=client
+            "task",
+            "description",
+            TestContent.model_validate(quiz_payload()),
+            {"8": "answer", "9": "answer", "10": "answer"},
+            client=client,
         )
     assert len(client.completions.calls) == 3
 

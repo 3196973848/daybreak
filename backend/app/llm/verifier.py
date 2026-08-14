@@ -77,6 +77,10 @@ class ShortGradeResult(BaseModel):
         return self
 
 
+class _AnsweredShortGradeResult(BaseModel):
+    items: list[ShortQuestionGrade]
+
+
 class QuizQuestionResult(BaseModel):
     id: int
     type: Literal["choice", "short"]
@@ -98,7 +102,7 @@ TEST_GENERATE_PROMPT = """你是学习测试出题助手。基于学习任务内
 输出格式：{"questions": [{"id": 1, "type": "choice", "text": "...", "options": ["a", "b", "c", "d"], "correct_answer": "a", "reference_answer": null, "rubric_points": []}, {"id": 8, "type": "short", "text": "...", "options": [], "correct_answer": null, "reference_answer": "...", "rubric_points": ["..."]}]}"""
 
 SHORT_GRADE_PROMPT = """你是严格但公平的简答题评分老师。只根据每道题的参考答案和评分点评分。
-必须只输出 JSON，items 必须依次且恰好包含题目 ID 8、9、10，每题 score 必须在 0 到 10 之间，并给出 feedback。输出格式：{"items": [{"id": 8, "score": 0, "feedback": "中文评语"}, {"id": 9, "score": 0, "feedback": "中文评语"}, {"id": 10, "score": 0, "feedback": "中文评语"}]}"""
+必须只输出 JSON，items 必须依次且恰好包含输入中提供的题目 ID，不得添加或遗漏；每题 score 必须在 0 到 10 之间，并给出 feedback。输出格式：{"items": [{"id": 8, "score": 0, "feedback": "中文评语"}]}"""
 
 DELIVER_GENERATE_PROMPT = """你是交付验收设计者。为实操/项目任务写 2-5 条明确、可检验的验收标准。
 只输出 JSON：{"acceptance_criteria": "标准文本"}。"""
@@ -184,19 +188,37 @@ def grade_short_answers(
         }
         for q in content.questions
         if q.type == "short"
+        and isinstance(answers.get(str(q.id)), str)
+        and bool(answers[str(q.id)].strip())
     ]
+    answered_ids = [question["id"] for question in short_questions]
+    if not answered_ids:
+        return ShortGradeResult(items=[
+            ShortQuestionGrade(id=q.id, score=0, feedback="")
+            for q in content.questions
+            if q.type == "short"
+        ])
     errors = []
     for _attempt in range(3):
         try:
-            return _parse(
+            answered_grade = _parse(
                 client,
                 SHORT_GRADE_PROMPT,
                 json.dumps(
                     {"任务": task_title, "内容": task_description, "简答题": short_questions},
                     ensure_ascii=False,
                 ),
-                ShortGradeResult,
+                _AnsweredShortGradeResult,
             )
+            if [item.id for item in answered_grade.items] != answered_ids:
+                raise RuntimeError("LLM 输出的简答题编号与已作答题目不一致")
+            answered_by_id = {item.id: item for item in answered_grade.items}
+            return ShortGradeResult(items=[
+                answered_by_id.get(q.id)
+                or ShortQuestionGrade(id=q.id, score=0, feedback="")
+                for q in content.questions
+                if q.type == "short"
+            ])
         except RuntimeError as exc:
             errors.append(str(exc))
     raise RuntimeError(f"简答题评分失败：{'；'.join(errors)}")
@@ -222,13 +244,15 @@ def score_test(
                 )
             )
         else:
+            answer = answers.get(str(question.id))
+            answered = isinstance(answer, str) and bool(answer.strip())
             grade = short_by_id[question.id]
             details.append(
                 QuizQuestionResult(
                     id=question.id,
                     type="short",
-                    points=grade.score,
-                    feedback=grade.feedback,
+                    points=grade.score if answered else 0,
+                    feedback=grade.feedback if answered else "",
                 )
             )
     points = round(sum(item.points for item in details), 1)

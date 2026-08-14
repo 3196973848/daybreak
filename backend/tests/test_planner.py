@@ -1,6 +1,8 @@
 import json
 
-from app.llm.planner import generate_plan
+import pytest
+
+from app.llm.planner import generate_plan, parse_plan_spec
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 
 
@@ -98,3 +100,39 @@ def test_generate_plan_handles_invalid_json():
         assert False, "should raise"
     except RuntimeError as exc:
         assert "JSON" in str(exc)
+
+
+@pytest.mark.parametrize(
+    "invalid_kind",
+    ["unsupported_type", "task_date", "milestone_date", "plan_date"],
+)
+def test_parse_plan_spec_rejects_unsupported_types_and_model_owned_dates(invalid_kind):
+    payload = _valid_plan_payload()
+    if invalid_kind == "unsupported_type":
+        payload["milestones"][0]["tasks"][0]["type"] = "study"
+    elif invalid_kind == "task_date":
+        payload["milestones"][0]["tasks"][0]["scheduled_date"] = "2026-08-15"
+    elif invalid_kind == "milestone_date":
+        payload["milestones"][0]["due_date"] = "2026-08-15"
+    else:
+        payload["target_date"] = "2026-08-15"
+
+    with pytest.raises(RuntimeError, match="结构"):
+        parse_plan_spec(json.dumps(payload))
+
+
+def _valid_plan_payload():
+    return PlanSpec(
+        strategy="策略",
+        milestones=[MilestoneSpec(
+            title="领域",
+            description="领域成果",
+            order=1,
+            tasks=[TaskSpec(
+                title="原子任务",
+                description="可验证成果",
+                type="learn",
+                effort_hours=1.0,
+            )],
+        )],
+    ).model_dump()

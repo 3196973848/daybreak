@@ -1,7 +1,9 @@
+import json
 from datetime import date, timedelta
 
 import pytest
 
+from app.llm.planner import parse_plan_spec
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 from app.models import Goal
 from app.services.capacity import InsufficientCapacityError
@@ -259,6 +261,85 @@ def test_invalid_atomic_plan_stops_after_three_attempts_and_rolls_back(
 
     assert len(calls) == 3
     assert db_session.query(Goal).count() == 0
+
+
+@pytest.mark.parametrize(
+    "invalid_message",
+    ["LLM 返回为空", "LLM 输出不是合法 JSON", "LLM 输出不符合结构"],
+    ids=["empty", "malformed-json", "schema-invalid"],
+)
+def test_invalid_model_output_is_regenerated_with_safe_feedback(
+    db_session, monkeypatch, invalid_message
+):
+    calls = []
+    sentinel = "PRIVATE_MODEL_OUTPUT_SENTINEL"
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RuntimeError(f"{invalid_message}: {sentinel}")
+        return _plan_with_efforts(1.0)
+
+    monkeypatch.setattr("app.services.planner_service.generate_plan", fake)
+    goal = create_goal_with_plan(db_session, "学习交易", daily_hours=2.0)
+
+    assert goal.id is not None
+    assert len(calls) == 2
+    assert calls[1]["feedback"] == (
+        "上次模型输出为空、不是合法 JSON 或不符合计划结构；"
+        "请只返回符合约定结构的完整 JSON 计划"
+    )
+    assert sentinel not in calls[1]["feedback"]
+
+
+def test_three_invalid_model_outputs_fail_safely_and_roll_back(db_session, monkeypatch):
+    calls = []
+    sentinel = "PRIVATE_MODEL_OUTPUT_SENTINEL"
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        raise RuntimeError(f"invalid model output: {sentinel}")
+
+    monkeypatch.setattr("app.services.planner_service.generate_plan", fake)
+
+    with pytest.raises(RuntimeError, match="无法生成有效的原子计划") as caught:
+        create_goal_with_plan(db_session, "学习交易", daily_hours=2.0)
+
+    assert len(calls) == 3
+    assert [call["feedback"] for call in calls] == [
+        None,
+        "上次模型输出为空、不是合法 JSON 或不符合计划结构；"
+        "请只返回符合约定结构的完整 JSON 计划",
+        "上次模型输出为空、不是合法 JSON 或不符合计划结构；"
+        "请只返回符合约定结构的完整 JSON 计划",
+    ]
+    assert sentinel not in str(caught.value)
+    assert db_session.query(Goal).count() == 0
+
+
+@pytest.mark.parametrize("invalid_kind", ["unsupported_type", "date_extra"])
+def test_schema_invalid_model_plan_is_regenerated(
+    db_session, monkeypatch, invalid_kind
+):
+    invalid = _plan_with_efforts(1.0).model_dump()
+    task_payload = invalid["milestones"][0]["tasks"][0]
+    if invalid_kind == "unsupported_type":
+        task_payload["type"] = "study"
+    else:
+        task_payload["scheduled_date"] = "2026-08-15"
+    payloads = [invalid, _plan_with_efforts(1.0).model_dump()]
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        return parse_plan_spec(json.dumps(payloads.pop(0)))
+
+    monkeypatch.setattr("app.services.planner_service.generate_plan", fake)
+    goal = create_goal_with_plan(db_session, "学习交易", daily_hours=2.0)
+
+    assert goal.id is not None
+    assert len(calls) == 2
+    assert goal.plan.milestones[0].tasks[0].type == "learn"
 
 
 def test_capacity_shortage_rolls_back_and_reports_suggestion(db_session, monkeypatch):

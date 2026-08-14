@@ -1,5 +1,10 @@
 import json
 
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError, StatementError
+
+from app.database import engine
 from app.llm.verifier import DeliverContent, GradeResult, ShortGradeResult, TestContent
 from app.models import Goal, Milestone, Plan, Task, VerificationRecord
 
@@ -85,7 +90,11 @@ def test_verification_test_flow(client, db_session, monkeypatch):
 
     res = client.post(
         f"/api/tasks/{task.id}/verification",
-        json={"record_id": record_id, "answers": {str(i): "A" for i in range(1, 8)}},
+        json={
+            "record_id": record_id,
+            "answers": {str(i): "A" for i in range(1, 8)}
+            | {str(i): f"answer {i}" for i in range(8, 11)},
+        },
     )
     assert res.status_code == 200
     body = res.json()
@@ -118,6 +127,41 @@ def test_verification_test_six_correct_choices_does_not_pass(client, db_session,
     assert body["score"] == 0.6
     assert body["passed"] is False
     assert body["verified"] is False
+    db_session.refresh(task)
+    assert task.verified is False
+
+
+@pytest.mark.parametrize(
+    "short_answers",
+    [
+        {},
+        {"8": "", "9": "   ", "10": "\t"},
+    ],
+    ids=["missing", "blank"],
+)
+def test_missing_or_blank_short_answers_cannot_be_model_credited_to_pass(
+    client, db_session, monkeypatch, short_answers
+):
+    task = _build_task(db_session, "learn")
+    monkeypatch.setattr("app.api.tasks.generate_test", lambda *args, **kwargs: _quiz_content())
+    monkeypatch.setattr(
+        "app.api.tasks.grade_short_answers",
+        lambda *args, **kwargs: _short_grade(10, 10, 10),
+    )
+
+    start = client.get(f"/api/tasks/{task.id}/verification").json()
+    answers = {str(i): "A" for i in range(1, 5)} | short_answers
+    response = client.post(
+        f"/api/tasks/{task.id}/verification",
+        json={"record_id": start["record_id"], "answers": answers},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["points"] == 40
+    assert body["score"] == 0.4
+    assert body["passed"] is False
+    assert [detail["points"] for detail in body["details"][7:]] == [0, 0, 0]
     db_session.refresh(task)
     assert task.verified is False
 
@@ -158,6 +202,7 @@ def test_verification_test_grading_failure_rolls_back_without_verifying(
     )
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "检验评分失败，请稍后重试"
     db_session.refresh(task)
     record = db_session.get(VerificationRecord, start["record_id"])
     assert task.verified is False
@@ -186,6 +231,58 @@ def test_start_verification_uses_prior_question_texts(client, db_session, monkey
     assert captured["history"] == [f"Q{i}" for i in range(1, 11)]
 
 
+def test_start_verification_reads_legacy_question_texts_without_weakening_new_records(
+    client, db_session, monkeypatch
+):
+    task = _build_task(db_session, "learn")
+    legacy = VerificationRecord(
+        task_id=task.id,
+        mode="test",
+        content=json.dumps(
+            {
+                "questions": [
+                    {
+                        "id": 1,
+                        "type": "choice",
+                        "text": "Legacy public question",
+                        "options": ["A", "B"],
+                    },
+                    {"id": 2, "type": "short", "text": "Legacy short question"},
+                    {"id": 3, "type": "choice", "text": None},
+                    "not a question object",
+                ]
+            }
+        ),
+        submission="",
+        result="",
+        passed=False,
+    )
+    malformed = VerificationRecord(
+        task_id=task.id,
+        mode="test",
+        content="not-json",
+        submission="",
+        result="",
+        passed=False,
+    )
+    db_session.add_all([legacy, malformed])
+    db_session.commit()
+    captured = {}
+
+    def fake_generate(title, description, previous_question_texts=None, client=None):
+        captured["history"] = previous_question_texts
+        return _quiz_content()
+
+    monkeypatch.setattr("app.api.tasks.generate_test", fake_generate)
+    response = client.get(f"/api/tasks/{task.id}/verification")
+
+    assert response.status_code == 200
+    assert captured["history"] == ["Legacy public question", "Legacy short question"]
+    new_record = db_session.get(VerificationRecord, response.json()["record_id"])
+    assert new_record.id not in {legacy.id, malformed.id}
+    TestContent.model_validate_json(new_record.content)
+
+
 def test_start_verification_generation_failure_rolls_back(client, db_session, monkeypatch):
     task = _build_task(db_session, "learn")
 
@@ -196,7 +293,66 @@ def test_start_verification_generation_failure_rolls_back(client, db_session, mo
     response = client.get(f"/api/tasks/{task.id}/verification")
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "检验生成失败，请稍后重试"
     assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 0
+
+
+def test_start_verification_parameter_error_never_exposes_private_content(
+    client, db_session, monkeypatch
+):
+    task = _build_task(db_session, "learn")
+    monkeypatch.setattr(
+        "app.api.tasks.generate_test", lambda *args, **kwargs: _quiz_content()
+    )
+    sentinels = [
+        "PRIVATE_CORRECT_ANSWER_SENTINEL",
+        "PRIVATE_REFERENCE_ANSWER_SENTINEL",
+        "PRIVATE_RUBRIC_POINT_SENTINEL",
+    ]
+    private_content = json.dumps(
+        {
+            "correct_answer": sentinels[0],
+            "reference_answer": sentinels[1],
+            "rubric_points": [sentinels[2]],
+        }
+    )
+    parameter_error = StatementError(
+        "insert failed",
+        "INSERT INTO verification_records (content) VALUES (:content)",
+        {"content": private_content},
+        RuntimeError("database unavailable"),
+    )
+    assert all(sentinel in str(parameter_error) for sentinel in sentinels)
+
+    def fail_flush(*args, **kwargs):
+        raise parameter_error
+
+    monkeypatch.setattr(db_session, "flush", fail_flush)
+    response = client.get(f"/api/tasks/{task.id}/verification")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "检验生成失败，请稍后重试"
+    encoded_response = json.dumps(response.json())
+    assert not any(sentinel in encoded_response for sentinel in sentinels)
+    assert "correct_answer" not in encoded_response
+    assert "reference_answer" not in encoded_response
+    assert "rubric_points" not in encoded_response
+
+
+def test_database_errors_hide_bound_private_verification_content():
+    sentinel = "PRIVATE_BOUND_VERIFICATION_CONTENT_SENTINEL"
+
+    with pytest.raises(SQLAlchemyError) as caught:
+        with engine.connect() as connection:
+            connection.execute(
+                text(
+                    "SELECT :private_content "
+                    "FROM definitely_missing_verification_private_table"
+                ),
+                {"private_content": sentinel},
+            )
+
+    assert sentinel not in str(caught.value)
 
 
 def test_start_verification_refresh_failure_rolls_back_without_record(
@@ -225,7 +381,7 @@ def test_start_verification_refresh_failure_rolls_back_without_record(
     response = client.get(f"/api/tasks/{task.id}/verification")
 
     assert response.status_code == 502
-    assert "refresh failed" in response.json()["detail"]
+    assert response.json()["detail"] == "检验生成失败，请稍后重试"
     assert rollback_calls == [True]
     assert db_session.query(VerificationRecord).filter_by(task_id=task.id).count() == 0
 
@@ -278,7 +434,7 @@ def test_verification_submission_commit_failure_rolls_back_prior_state(
     )
 
     assert response.status_code == 502
-    assert "commit failed" in response.json()["detail"]
+    assert response.json()["detail"] == "检验评分失败，请稍后重试"
     assert rollback_calls == [True]
     record = db_session.get(VerificationRecord, start["record_id"])
     db_session.refresh(task)
@@ -345,6 +501,7 @@ def test_verification_delivery_grading_failure_rolls_back(client, db_session, mo
     )
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "交付评分失败，请稍后重试"
     db_session.refresh(task)
     record = db_session.get(VerificationRecord, start["record_id"])
     assert task.verified is False

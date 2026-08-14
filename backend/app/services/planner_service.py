@@ -12,6 +12,12 @@ from .capacity import InsufficientCapacityError
 from .plan_validation import PlanValidationError, validate_atomic_plan
 
 
+INVALID_MODEL_OUTPUT_FEEDBACK = (
+    "上次模型输出为空、不是合法 JSON 或不符合计划结构；"
+    "请只返回符合约定结构的完整 JSON 计划"
+)
+
+
 def create_goal_with_plan(
     db: Session,
     title: str,
@@ -35,20 +41,24 @@ def create_goal_with_plan(
         feedback = None
         spec = None
         for attempt in range(3):
-            spec = generate_plan(
-                title,
-                description,
-                target_date.isoformat() if target_date else None,
-                daily_hours=daily_hours,
-                feedback=feedback,
-            )
             try:
+                spec = generate_plan(
+                    title,
+                    description,
+                    target_date.isoformat() if target_date else None,
+                    daily_hours=daily_hours,
+                    feedback=feedback,
+                )
                 validate_atomic_plan(spec, daily_hours)
                 break
             except PlanValidationError as exc:
                 feedback = f"{exc}；请确保单个任务不超过每日投入时间"
                 if attempt == 2:
-                    raise RuntimeError("无法生成有效的原子计划") from exc
+                    raise RuntimeError("无法生成有效的原子计划") from None
+            except RuntimeError:
+                feedback = INVALID_MODEL_OUTPUT_FEEDBACK
+                if attempt == 2:
+                    raise RuntimeError("无法生成有效的原子计划") from None
 
         groups = group_tasks(spec, daily_hours)
         if target_date is not None:

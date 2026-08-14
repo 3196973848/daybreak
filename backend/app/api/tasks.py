@@ -21,6 +21,9 @@ from .goals import serialize_task
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 PASS_THRESHOLD = 0.7
+VERIFICATION_GENERATION_ERROR = "检验生成失败，请稍后重试"
+VERIFICATION_GRADING_ERROR = "检验评分失败，请稍后重试"
+DELIVERY_GRADING_ERROR = "交付评分失败，请稍后重试"
 
 
 class TaskComplete(BaseModel):
@@ -42,6 +45,23 @@ def _refresh_milestone(milestone: Milestone) -> None:
         milestone.status = "active"
     else:
         milestone.status = "todo"
+
+
+def _historical_question_texts(content: str) -> list[str]:
+    try:
+        value = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(value, dict) or not isinstance(value.get("questions"), list):
+        return []
+    texts = []
+    for question in value["questions"]:
+        if not isinstance(question, dict):
+            continue
+        text = question.get("text")
+        if isinstance(text, str) and text.strip():
+            texts.append(text)
+    return texts
 
 
 @router.patch("/{task_id}")
@@ -73,8 +93,7 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
             history = []
             for prior in task.verifications:
                 if prior.mode == "test":
-                    prior_content = TestContent.model_validate_json(prior.content)
-                    history.extend(question.text for question in prior_content.questions)
+                    history.extend(_historical_question_texts(prior.content))
             content = generate_test(
                 task.title, task.description, previous_question_texts=history
             )
@@ -92,9 +111,9 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
         db.flush()
         db.refresh(record)
         db.commit()
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"检验题生成失败：{exc}") from exc
+        raise HTTPException(status_code=502, detail=VERIFICATION_GENERATION_ERROR) from None
     return {"mode": mode, "record_id": record.id, "content": public_content}
 
 
@@ -121,9 +140,9 @@ def submit_verification(
             grade_score = quiz_score.score
             record.result = quiz_score.model_dump_json()
             record.submission = json.dumps(payload.answers, ensure_ascii=False)
-        except Exception as exc:
+        except Exception:
             db.rollback()
-            raise HTTPException(status_code=502, detail=f"检验题评分失败：{exc}") from exc
+            raise HTTPException(status_code=502, detail=VERIFICATION_GRADING_ERROR) from None
     else:
         if payload.submission is None:
             raise HTTPException(status_code=400, detail="交付模式需提交 submission")
@@ -133,9 +152,9 @@ def submit_verification(
             grade_score = grade.score
             record.result = grade.model_dump_json()
             record.submission = payload.submission
-        except Exception as exc:
+        except Exception:
             db.rollback()
-            raise HTTPException(status_code=502, detail=f"交付评分失败：{exc}") from exc
+            raise HTTPException(status_code=502, detail=DELIVERY_GRADING_ERROR) from None
 
     try:
         passed = grade_score >= PASS_THRESHOLD
@@ -147,11 +166,11 @@ def submit_verification(
             _refresh_milestone(task.milestone)
         db.flush()
         db.commit()
-    except Exception as exc:
+    except Exception:
         db.rollback()
         if record.mode == "test":
-            raise HTTPException(status_code=502, detail=f"检验题评分失败：{exc}") from exc
-        raise HTTPException(status_code=502, detail=f"交付评分失败：{exc}") from exc
+            raise HTTPException(status_code=502, detail=VERIFICATION_GRADING_ERROR) from None
+        raise HTTPException(status_code=502, detail=DELIVERY_GRADING_ERROR) from None
     response = {
         "passed": passed,
         "score": grade_score,

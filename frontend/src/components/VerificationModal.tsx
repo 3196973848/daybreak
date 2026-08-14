@@ -8,7 +8,7 @@ import { IconX } from './icons'
 export function VerificationModal({
   task, onClose, onVerified,
 }: { task: TaskDTO; onClose: () => void; onVerified?: (result: VerificationResult) => void }) {
-  const [mode, setMode] = useState<'test' | 'deliver'>('test')
+  const mode = task.type === 'learn' ? 'test' : 'deliver'
   const [recordId, setRecordId] = useState(0)
   const [content, setContent] = useState<TestContentDTO | DeliverContentDTO | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
@@ -38,7 +38,6 @@ export function VerificationModal({
     api.getVerification(task.id)
       .then((start) => {
         if (!active) return
-        setMode(start.mode)
         setRecordId(start.record_id)
         setContent(start.content)
       })
@@ -78,6 +77,8 @@ export function VerificationModal({
 
   const testContent = mode === 'test' ? content as TestContentDTO : null
   const deliverContent = mode === 'deliver' ? content as DeliverContentDTO : null
+  const generationLabel = mode === 'test' ? '正在生成 10 道题' : '正在生成验收标准'
+  const generationMessage = `${generationLabel}…`
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
@@ -129,11 +130,11 @@ export function VerificationModal({
           </div>
         ) : generating ? (
           <div className="verification-loading">
-            <p>正在生成 10 道题…</p>
+            <p>{generationMessage}</p>
             <div
               className="verification-progress"
               role="progressbar"
-              aria-label="正在生成 10 道题"
+              aria-label={generationLabel}
               aria-valuetext="生成中"
             ><span /></div>
           </div>

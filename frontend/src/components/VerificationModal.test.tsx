@@ -99,6 +99,22 @@ describe('VerificationModal', () => {
     expect(screen.queryByRole('button', { name: '提交检验' })).toBeNull()
   })
 
+  it.each(['practice', 'project'] as const)(
+    'uses delivery-specific initial and loading copy for %s tasks',
+    (type) => {
+      const generation = deferred<VerificationStart>()
+      mockedApi.getVerification.mockReturnValue(generation.promise)
+
+      render(<VerificationModal task={{ ...task, type }} onClose={vi.fn()} />)
+
+      expect(screen.getByText('交付模式 · 提交成果描述，评审是否达标')).toBeTruthy()
+      expect(screen.getByText('正在生成验收标准…')).toBeTruthy()
+      expect(screen.getByRole('progressbar', { name: '正在生成验收标准' })).toBeTruthy()
+      expect(screen.queryByText(/答对 70%/)).toBeNull()
+      expect(screen.queryByText(/10 道题/)).toBeNull()
+    },
+  )
+
   it('renders all seven public choice questions and three public short questions after generation', async () => {
     mockedApi.getVerification.mockResolvedValue(quizStart)
 
