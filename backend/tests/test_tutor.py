@@ -125,6 +125,78 @@ def test_generate_tutor_turn_retries_empty_and_malformed_content_then_returns_va
     assert "not json" not in retry_payload
 
 
+@pytest.mark.parametrize("invalid_initial_stage", ["explain", "practice", "remediate", "ready"])
+def test_initial_turn_retries_each_non_diagnostic_legal_stage_until_diagnose(
+    invalid_initial_stage,
+):
+    invalid_payload = tutor_payload(
+        reply=f"raw {invalid_initial_stage} reply",
+        stage=invalid_initial_stage,
+        ready_for_verification=invalid_initial_stage == "ready",
+    )
+    client = SequentialClient([
+        json.dumps(invalid_payload, ensure_ascii=False),
+        json.dumps(tutor_payload(), ensure_ascii=False),
+    ])
+
+    output = generate_tutor_turn(
+        task_title="学习 Python",
+        task_description="理解函数",
+        estimated_hours=1.0,
+        previous_summary="",
+        recent_turns=[],
+        user_message=None,
+        already_ready=False,
+        client=client,
+    )
+
+    assert output.stage == "diagnose"
+    assert len(client.completions.calls) == 2
+    retry_payload = client.completions.calls[1]["messages"][1]["content"]
+    assert "上一轮输出无效，请重新输出完整且符合结构的 JSON。" in retry_payload
+    assert f"raw {invalid_initial_stage} reply" not in retry_payload
+
+
+def test_three_non_diagnostic_initial_responses_fail_with_safe_terminal_error():
+    client = SequentialClient([
+        json.dumps(
+            tutor_payload(reply="raw explain sentinel", stage="explain"),
+            ensure_ascii=False,
+        ),
+        json.dumps(
+            tutor_payload(reply="raw practice sentinel", stage="practice"),
+            ensure_ascii=False,
+        ),
+        json.dumps(
+            tutor_payload(
+                reply="raw ready sentinel",
+                stage="ready",
+                ready_for_verification=True,
+            ),
+            ensure_ascii=False,
+        ),
+    ])
+
+    with pytest.raises(RuntimeError) as exc_info:
+        generate_tutor_turn(
+            task_title="学习 Python",
+            task_description="理解函数",
+            estimated_hours=1.0,
+            previous_summary="",
+            recent_turns=[],
+            user_message=None,
+            already_ready=False,
+            client=client,
+        )
+
+    assert str(exc_info.value) == "导师暂时无法生成有效回复"
+    assert "raw" not in str(exc_info.value)
+    assert len(client.completions.calls) == 3
+    second_prompt = client.completions.calls[1]["messages"][1]["content"]
+    assert "上一轮输出无效，请重新输出完整且符合结构的 JSON。" in second_prompt
+    assert "raw explain sentinel" not in second_prompt
+
+
 def test_generate_tutor_turn_hides_invalid_outputs_and_exceptions_after_three_attempts():
     client = SequentialClient(["", "not json", "{\"reply\": \"bad\"}"])
 
