@@ -177,6 +177,31 @@ def test_initial_goal_flush_failure_rolls_back_and_leaves_session_usable(
     assert db_session.query(Goal).filter_by(title="可恢复").one() is not None
 
 
+def test_refresh_failure_rolls_back_and_leaves_session_usable(
+    db_session, monkeypatch
+):
+    original_refresh = db_session.refresh
+
+    monkeypatch.setattr(
+        "app.services.planner_service.generate_plan", lambda *a, **k: _fake_spec()
+    )
+    monkeypatch.setattr(
+        db_session,
+        "refresh",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("refresh failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="refresh failed"):
+        create_goal_with_plan(db_session, "goal")
+
+    assert db_session.query(Goal).count() == 0
+
+    monkeypatch.setattr(db_session, "refresh", original_refresh)
+    db_session.add(Goal(title="recovered"))
+    db_session.commit()
+    assert db_session.query(Goal).filter_by(title="recovered").one() is not None
+
+
 def test_create_goal_persists_full_tree(db_session, monkeypatch):
     monkeypatch.setattr(
         "app.services.planner_service.generate_plan", lambda *a, **k: _fake_spec()

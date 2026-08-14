@@ -112,9 +112,10 @@ def create_goal_with_plan(
                     type=t.type, scheduled_date=by_key[(mi, idx)],
                     effort=t.effort_hours, order=idx, status="todo", verified=False,
                 ))
+        db.flush()
+        db.refresh(goal)
         db.commit()
     except Exception:
         db.rollback()
         raise
-    db.refresh(goal)
     return goal

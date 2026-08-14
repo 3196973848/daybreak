@@ -122,6 +122,68 @@ def test_goal_create_rejects_non_finite_daily_hours():
         GoalCreate(title="目标", daily_hours=float("inf"))
 
 
+def test_create_goal_rejects_large_non_half_hour_value_without_calling_service(
+    client, db_session, monkeypatch
+):
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+
+    response = client.post(
+        "/api/goals",
+        json={"title": "goal", "daily_hours": 1_000_000_000.25},
+    )
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_create_goal_rejects_unrepresentable_integer_without_calling_service(
+    client, db_session, monkeypatch
+):
+    called = False
+
+    def fake(*args, **kwargs):
+        nonlocal called
+        called = True
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+
+    response = client.post(
+        "/api/goals",
+        json={"title": "goal", "daily_hours": 10**400},
+    )
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_create_goal_forwards_large_representable_half_hour_value(
+    client, db_session, monkeypatch
+):
+    captured = {}
+
+    def fake(*args, **kwargs):
+        captured.update(kwargs)
+        return _build_goal(db_session)
+
+    monkeypatch.setattr("app.api.goals.create_goal_with_plan", fake)
+
+    response = client.post(
+        "/api/goals",
+        json={"title": "goal", "daily_hours": 10**300},
+    )
+
+    assert response.status_code == 201
+    assert captured["daily_hours"] == 1e300
+
+
 def test_create_goal_returns_structured_capacity_error(client, monkeypatch):
     def fake(*args, **kwargs):
         raise InsufficientCapacityError(4.0, 4.0, 3)

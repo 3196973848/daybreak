@@ -1,5 +1,6 @@
 import math
 from datetime import date
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,11 +28,19 @@ class GoalCreate(BaseModel):
     def validate_daily_hours(cls, value):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError("daily_hours 必须是数字")
-        if not math.isfinite(value) or value <= 0:
+        decimal_value = Decimal(str(value))
+        if not decimal_value.is_finite() or decimal_value <= 0:
             raise ValueError("daily_hours 必须是有限的正数")
-        if not math.isclose(value * 2, round(value * 2)):
+        try:
+            normalized = float(decimal_value)
+        except (OverflowError, ValueError):
+            raise ValueError("daily_hours 必须是有限的正数") from None
+        if not math.isfinite(normalized):
+            raise ValueError("daily_hours 必须是有限的正数")
+        numerator, denominator = decimal_value.as_integer_ratio()
+        if (numerator * 2) % denominator != 0:
             raise ValueError("daily_hours 必须以 0.5 小时递增")
-        return float(value)
+        return normalized
 
     @model_validator(mode="after")
     def validate_schedule_input(self):
