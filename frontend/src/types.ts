@@ -61,9 +61,20 @@ export interface VerificationSubmit {
   submission?: string
 }
 
+export interface QuizQuestionResultDTO {
+  id: number
+  type: 'choice' | 'short'
+  points: number
+  correct?: boolean | null
+  correct_answer?: string | null
+  feedback: string
+}
+
 export interface VerificationResult {
   passed: boolean
   score: number
   feedback: string
   verified: boolean
+  points?: number
+  details?: QuizQuestionResultDTO[]
 }

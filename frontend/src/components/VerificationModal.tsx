@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type {
   DeliverContentDTO, TaskDTO, TestContentDTO, VerificationResult,
@@ -13,34 +13,66 @@ export function VerificationModal({
   const [content, setContent] = useState<TestContentDTO | DeliverContentDTO | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [submission, setSubmission] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(true)
+  const [generationAttempt, setGenerationAttempt] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<VerificationResult | null>(null)
   const [error, setError] = useState('')
+  const submissionAttempt = useRef(0)
 
   useEffect(() => {
-    api.getVerification(task.id)
-      .then((start) => { setMode(start.mode); setRecordId(start.record_id); setContent(start.content) })
-      .catch((e) => setError(e instanceof Error ? e.message : '加载失败'))
+    submissionAttempt.current += 1
+    setAnswers({})
+    setSubmission('')
+    setSubmitting(false)
+    setResult(null)
+    return () => { submissionAttempt.current += 1 }
   }, [task.id])
+
+  useEffect(() => {
+    let active = true
+    setContent(null)
+    setRecordId(0)
+    setError('')
+    setGenerating(true)
+    api.getVerification(task.id)
+      .then((start) => {
+        if (!active) return
+        setMode(start.mode)
+        setRecordId(start.record_id)
+        setContent(start.content)
+      })
+      .catch((e) => {
+        if (active) setError(e instanceof Error ? e.message : '加载失败')
+      })
+      .finally(() => {
+        if (active) setGenerating(false)
+      })
+    return () => { active = false }
+  }, [generationAttempt, task.id])
 
   async function submit() {
     if (recordId === 0 || content === null) {
       setError('检验内容尚未加载，无法提交')
       return
     }
-    setLoading(true)
+    const attempt = ++submissionAttempt.current
+    setSubmitting(true)
     setError('')
     try {
       const body = mode === 'test'
         ? { record_id: recordId, answers }
         : { record_id: recordId, submission }
       const res = await api.submitVerification(task.id, body)
+      if (submissionAttempt.current !== attempt) return
       setResult(res)
       onVerified?.(res)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '提交失败')
+      if (submissionAttempt.current === attempt) {
+        setError(e instanceof Error ? e.message : '提交失败')
+      }
     } finally {
-      setLoading(false)
+      if (submissionAttempt.current === attempt) setSubmitting(false)
     }
   }
 
@@ -58,16 +90,59 @@ export function VerificationModal({
           {mode === 'test' ? '测试模式 · 答对 70% 即通过' : '交付模式 · 提交成果描述，评审是否达标'}
         </p>
 
-        {error && <p style={{ color: '#f87171', fontSize: 13 }}>{error}</p>}
+        {error && <p className="error-text" role="alert">{error}</p>}
 
         {result ? (
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
               {result.passed ? '✓ 检验通过' : '✗ 未通过'}
             </div>
-            <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>得分：{Math.round(result.score * 100)}%</div>
+            {mode === 'test' && result.points !== undefined ? (
+              <>
+                <div className="dim verification-total">总分：{result.points} / 100</div>
+                {result.details && (
+                  <ol className="verification-details">
+                    {result.details.map((detail) => (
+                      <li key={detail.id} value={detail.id} data-testid={`verification-detail-${detail.id}`}>
+                        <div className="verification-detail-heading">
+                          <strong>第 {detail.id} 题</strong>
+                          {detail.type === 'choice' ? (
+                            <span>{detail.correct === true ? '正确' : '错误'} · {detail.points} / 10 分</span>
+                          ) : (
+                            <span>{detail.points} / 10 分</span>
+                          )}
+                        </div>
+                        {detail.type === 'choice' && detail.correct_answer != null && (
+                          <div className="dim">正确答案：{detail.correct_answer}</div>
+                        )}
+                        {detail.feedback && <p>{detail.feedback}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
+            ) : (
+              <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>得分：{Math.round(result.score * 100)}%</div>
+            )}
             <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{result.feedback}</p>
             <button className="btn" style={{ marginTop: 16 }} onClick={onClose}>关闭</button>
+          </div>
+        ) : generating ? (
+          <div className="verification-loading">
+            <p>正在生成 10 道题…</p>
+            <div
+              className="verification-progress"
+              role="progressbar"
+              aria-label="正在生成 10 道题"
+              aria-valuetext="生成中"
+            ><span /></div>
+          </div>
+        ) : content === null ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button className="btn-ghost" onClick={onClose}>取消</button>
+            <button className="btn" onClick={() => setGenerationAttempt((attempt) => attempt + 1)}>
+              重新生成
+            </button>
           </div>
         ) : (
           <>
@@ -108,8 +183,8 @@ export function VerificationModal({
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn-ghost" onClick={onClose}>取消</button>
-              <button className="btn" disabled={loading} onClick={() => void submit()}>
-                {loading ? 'AI 评审中…' : mode === 'test' ? '提交检验' : '提交评审'}
+              <button className="btn" disabled={submitting} onClick={() => void submit()}>
+                {submitting ? 'AI 评审中…' : mode === 'test' ? '提交检验' : '提交评审'}
               </button>
             </div>
           </>

@@ -123,6 +123,83 @@ button { cursor: pointer; font-family: inherit; }
 
 .input::placeholder { color: var(--text-faint); }
 
+/* ---------- 检验生成与结果 ---------- */
+.verification-loading {
+  padding: 16px 0 8px;
+}
+
+.verification-loading p {
+  margin: 0 0 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.verification-progress {
+  height: 8px;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.verification-progress span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: verification-progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes verification-progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(286%); }
+}
+
+.verification-total {
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.verification-details {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.verification-details li {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.verification-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.verification-details p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verification-progress span {
+    transform: none;
+    animation: verification-progress-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes verification-progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .duration-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 110px;
