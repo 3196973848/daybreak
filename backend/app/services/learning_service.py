@@ -1,10 +1,14 @@
 import json
+from threading import Lock
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from ..llm.tutor import generate_tutor_turn
 from ..models import LearningSession, LearningTurn, Task
+
+
+_TASK_LOCK_STRIPES = tuple(Lock() for _ in range(64))
 
 
 class LearningTaskNotFound(Exception):
@@ -27,19 +31,42 @@ class LearningPersistenceError(Exception):
     pass
 
 
+def _raise_read_error(db: Session | None) -> None:
+    if db is not None:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    raise LearningPersistenceError("Learning data could not be read.") from None
+
+
 def _learning_task(db: Session, task_id: int) -> Task:
-    task = db.get(Task, task_id)
+    try:
+        task = db.get(Task, task_id)
+        task_type = task.type if task is not None else None
+    except Exception:
+        _raise_read_error(db)
     if task is None:
         raise LearningTaskNotFound("Learning task was not found.")
-    if task.type != "learn":
+    if task_type != "learn":
         raise LearningTaskTypeError("This task does not support learning sessions.")
     return task
 
 
 def _session_for_task(db: Session, task: Task) -> LearningSession | None:
-    return db.scalar(
-        select(LearningSession).where(LearningSession.task_id == task.id)
-    )
+    try:
+        return db.scalar(
+            select(LearningSession).where(LearningSession.task_id == task.id)
+        )
+    except Exception:
+        _raise_read_error(db)
+
+
+def _session_turns(db: Session, session: LearningSession) -> list[LearningTurn]:
+    try:
+        return list(session.turns)
+    except Exception:
+        _raise_read_error(db)
 
 
 def _load_points(value: str) -> list[str]:
@@ -91,7 +118,11 @@ def get_learning_session(db: Session, task_id: int) -> LearningSession:
     return session
 
 
-def start_learning_session(db: Session, task_id: int) -> LearningSession:
+def _task_lock(task_id: int) -> Lock:
+    return _TASK_LOCK_STRIPES[task_id % len(_TASK_LOCK_STRIPES)]
+
+
+def _start_learning_session(db: Session, task_id: int) -> LearningSession:
     task = _learning_task(db, task_id)
     existing = _session_for_task(db, task)
     if existing is not None:
@@ -133,7 +164,12 @@ def start_learning_session(db: Session, task_id: int) -> LearningSession:
     return session
 
 
-def add_learning_turn(
+def start_learning_session(db: Session, task_id: int) -> LearningSession:
+    with _task_lock(task_id):
+        return _start_learning_session(db, task_id)
+
+
+def _add_learning_turn(
     db: Session, task_id: int, client_turn_id: str, message: str
 ) -> tuple[LearningSession, LearningTurn]:
     task = _learning_task(db, task_id)
@@ -141,8 +177,9 @@ def add_learning_turn(
     if session is None:
         raise LearningSessionNotFound("Learning session was not found.")
 
+    turns = _session_turns(db, session)
     existing = next(
-        (turn for turn in session.turns if turn.client_turn_id == client_turn_id), None
+        (turn for turn in turns if turn.client_turn_id == client_turn_id), None
     )
     if existing is not None:
         return session, existing
@@ -150,13 +187,20 @@ def add_learning_turn(
     if not isinstance(message, str) or not (message := message.strip()):
         raise ValueError("Learning message must not be blank.")
 
+    try:
+        estimated_hours = session.estimated_hours_snapshot
+        previous_summary = session.session_summary
+        recent_turns = _tutor_context(turns[-12:])
+        already_ready = session.ready_for_verification
+    except Exception:
+        _raise_read_error(db)
     output = _generate(
         task=task,
-        estimated_hours=session.estimated_hours_snapshot,
-        previous_summary=session.session_summary,
-        recent_turns=_tutor_context(session.turns[-12:]),
+        estimated_hours=estimated_hours,
+        previous_summary=previous_summary,
+        recent_turns=recent_turns,
         user_message=message,
-        already_ready=session.ready_for_verification,
+        already_ready=already_ready,
     )
     turn = LearningTurn(
         session_id=session.id,
@@ -183,5 +227,16 @@ def add_learning_turn(
     return session, turn
 
 
+def add_learning_turn(
+    db: Session, task_id: int, client_turn_id: str, message: str
+) -> tuple[LearningSession, LearningTurn]:
+    with _task_lock(task_id):
+        return _add_learning_turn(db, task_id, client_turn_id, message)
+
+
 def goal_id_for(session: LearningSession) -> int:
-    return session.task.milestone.plan.goal_id
+    db = object_session(session)
+    try:
+        return session.task.milestone.plan.goal_id
+    except Exception:
+        _raise_read_error(db)

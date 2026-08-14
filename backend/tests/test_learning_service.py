@@ -1,8 +1,12 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event, Lock
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, event, func, select
+from sqlalchemy.orm import sessionmaker
 
+from app.database import Base
 from app.llm.tutor import TutorOutput
 from app.models import Goal, LearningSession, LearningTurn, Milestone, Plan, Task
 from app.services.learning_service import (
@@ -65,6 +69,39 @@ def _patch_tutor(monkeypatch, outputs):
     return calls
 
 
+def _concurrent_database(tmp_path):
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'learning-concurrency.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(
+        bind=engine, autoflush=False, expire_on_commit=False
+    )
+    with session_factory() as setup_session:
+        task_id = _task(setup_session).id
+    return engine, session_factory, task_id
+
+
+def _patch_concurrent_tutor(monkeypatch, output):
+    calls = []
+    calls_lock = Lock()
+    second_call = Event()
+
+    def fake_tutor(**kwargs):
+        with calls_lock:
+            calls.append(kwargs)
+            call_number = len(calls)
+            if call_number == 2:
+                second_call.set()
+        if call_number == 1:
+            second_call.wait(timeout=1)
+        return output
+
+    monkeypatch.setattr("app.services.learning_service.generate_tutor_turn", fake_tutor)
+    return calls
+
+
 def test_start_creates_a_diagnostic_session_with_an_initial_turn_and_effort_snapshot(
     db_session, monkeypatch
 ):
@@ -95,6 +132,36 @@ def test_start_is_idempotent_and_does_not_generate_a_second_diagnostic(db_sessio
     assert second.id == first.id
     assert len(calls) == 1
     assert db_session.scalar(select(func.count()).select_from(LearningSession)) == 1
+
+
+def test_simultaneous_start_returns_one_saved_session_with_one_model_call(
+    tmp_path, monkeypatch
+):
+    engine, session_factory, task_id = _concurrent_database(tmp_path)
+    calls = _patch_concurrent_tutor(monkeypatch, _tutor_output())
+    start_barrier = Barrier(3)
+
+    def worker():
+        with session_factory() as worker_session:
+            start_barrier.wait()
+            session = start_learning_session(worker_session, task_id)
+            return session.id
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(worker) for _ in range(2)]
+            start_barrier.wait()
+            session_ids = [future.result(timeout=5) for future in futures]
+
+        with session_factory() as check_session:
+            saved_count = check_session.scalar(
+                select(func.count()).select_from(LearningSession)
+            )
+        assert session_ids[0] == session_ids[1]
+        assert len(calls) == 1
+        assert saved_count == 1
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.parametrize(
@@ -135,6 +202,80 @@ def test_goal_id_for_returns_the_session_tasks_goal_id(db_session, monkeypatch):
     session = start_learning_session(db_session, task.id)
 
     assert goal_id_for(session) == task.milestone.plan.goal_id
+
+
+@pytest.mark.parametrize("method_name", ["get", "scalar"])
+def test_database_read_failure_is_safely_mapped_and_session_remains_reusable(
+    db_session, monkeypatch, method_name
+):
+    task = _task(db_session)
+    calls = _patch_tutor(monkeypatch, [_tutor_output()])
+    original = getattr(db_session, method_name)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("private database read detail")
+
+    monkeypatch.setattr(db_session, method_name, fail)
+    with pytest.raises(LearningPersistenceError) as error:
+        start_learning_session(db_session, task.id)
+
+    assert "private database read detail" not in str(error.value)
+    monkeypatch.setattr(db_session, method_name, original)
+    recovered = start_learning_session(db_session, task.id)
+    assert recovered.task_id == task.id
+    assert len(calls) == 1
+
+
+def test_turn_lazy_load_failure_is_safely_mapped_and_retry_succeeds(
+    db_session, monkeypatch
+):
+    task = _task(db_session)
+    _patch_tutor(monkeypatch, [_tutor_output()])
+    session = start_learning_session(db_session, task.id)
+    calls = _patch_tutor(monkeypatch, [_tutor_output(stage="explain")])
+    db_session.expire(session, ["turns"])
+
+    def fail_turn_read(conn, cursor, statement, parameters, context, executemany):
+        if "FROM learning_turns" in statement:
+            raise RuntimeError("private lazy-load detail")
+
+    event.listen(db_session.bind, "before_cursor_execute", fail_turn_read)
+    try:
+        with pytest.raises(LearningPersistenceError) as error:
+            add_learning_turn(db_session, task.id, "retry-lazy-read", "Continue")
+    finally:
+        event.remove(db_session.bind, "before_cursor_execute", fail_turn_read)
+
+    assert "private lazy-load detail" not in str(error.value)
+    _, recovered = add_learning_turn(
+        db_session, task.id, "retry-lazy-read", "Continue"
+    )
+    assert recovered.client_turn_id == "retry-lazy-read"
+    assert len(calls) == 1
+
+
+def test_goal_traversal_failure_is_safely_mapped_and_retry_succeeds(
+    db_session, monkeypatch
+):
+    task = _task(db_session)
+    _patch_tutor(monkeypatch, [_tutor_output()])
+    session = start_learning_session(db_session, task.id)
+    expected_goal_id = task.milestone.plan.goal_id
+    db_session.expire_all()
+
+    def fail_task_read(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().startswith("SELECT"):
+            raise RuntimeError("private goal traversal detail")
+
+    event.listen(db_session.bind, "before_cursor_execute", fail_task_read)
+    try:
+        with pytest.raises(LearningPersistenceError) as error:
+            goal_id_for(session)
+    finally:
+        event.remove(db_session.bind, "before_cursor_execute", fail_task_read)
+
+    assert "private goal traversal detail" not in str(error.value)
+    assert goal_id_for(session) == expected_goal_id
 
 
 def test_turn_sends_summary_and_the_latest_twelve_persisted_turns(db_session, monkeypatch):
@@ -229,6 +370,46 @@ def test_turn_returns_saved_turn_for_a_repeated_client_turn_id_without_regenerat
             LearningTurn.client_turn_id == "same-turn",
         )
     ) == 1
+
+
+def test_simultaneous_same_client_turn_returns_one_saved_turn_with_one_model_call(
+    tmp_path, monkeypatch
+):
+    engine, session_factory, task_id = _concurrent_database(tmp_path)
+    _patch_tutor(monkeypatch, [_tutor_output()])
+    with session_factory() as setup_session:
+        learning_session_id = start_learning_session(setup_session, task_id).id
+
+    calls = _patch_concurrent_tutor(monkeypatch, _tutor_output(stage="explain"))
+    start_barrier = Barrier(3)
+
+    def worker():
+        with session_factory() as worker_session:
+            start_barrier.wait()
+            _, turn = add_learning_turn(
+                worker_session, task_id, "concurrent-turn", "Continue"
+            )
+            return turn.id, turn.user_message
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(worker) for _ in range(2)]
+            start_barrier.wait()
+            returned = [future.result(timeout=5) for future in futures]
+
+        with session_factory() as check_session:
+            saved_count = check_session.scalar(
+                select(func.count()).select_from(LearningTurn).where(
+                    LearningTurn.session_id == learning_session_id,
+                    LearningTurn.client_turn_id == "concurrent-turn",
+                )
+            )
+        assert returned[0] == returned[1]
+        assert returned[0][1] == "Continue"
+        assert len(calls) == 1
+        assert saved_count == 1
+    finally:
+        engine.dispose()
 
 
 def test_start_model_failure_does_not_create_an_empty_session(db_session, monkeypatch):
