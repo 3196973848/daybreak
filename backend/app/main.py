@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .api import goals, tasks
+from .api import goals, learning, tasks
 from .database import init_db
 
 
@@ -14,6 +14,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PlanAgent", lifespan=lifespan)
 app.include_router(goals.router)
+app.include_router(learning.router)
 app.include_router(tasks.router)
 
 
