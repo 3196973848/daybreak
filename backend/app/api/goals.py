@@ -1,9 +1,9 @@
 import math
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, StrictInt, field_validator, model_validator
 from sqlalchemy.orm import Session
 
@@ -135,6 +135,48 @@ def get_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="目标不存在")
     return serialize_goal(goal, include_plan=True)
+
+
+@router.get("/{goal_id}/calendar.ics")
+def export_calendar(
+    goal_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == user.id).first()
+    if not goal or not goal.plan:
+        raise HTTPException(status_code=404, detail="目标不存在")
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//PlanAgent//PlanAgent//ZH-CN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    for milestone in sorted(goal.plan.milestones, key=lambda item: item.order):
+        for task in sorted(milestone.tasks, key=lambda item: item.order):
+            if task.scheduled_date is None:
+                continue
+            start = task.scheduled_date
+            end = start + timedelta(days=1)
+            lines.extend([
+                "BEGIN:VEVENT",
+                f"UID:planagent-{task.id}@planagent",
+                f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}",
+                f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}",
+                f"DTEND;VALUE=DATE:{end.strftime('%Y%m%d')}",
+                f"SUMMARY:{task.title}",
+            ])
+            if task.description:
+                lines.append(f"DESCRIPTION:{task.description}")
+            lines.append("END:VEVENT")
+    lines.append("END:VCALENDAR")
+
+    content = "\r\n".join(lines) + "\r\n"
+    return Response(
+        content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f'attachment; filename="planagent-{goal.id}.ics"'},
+    )
 
 
 @router.delete("/{goal_id}")

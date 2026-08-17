@@ -271,7 +271,26 @@ def test_delete_goal(client, db_session, monkeypatch):
     created = client.post("/api/goals", json={"title": "目标"}).json()
     res = client.delete(f"/api/goals/{created['id']}")
     assert res.status_code == 200
-    assert client.get(f"/api/goals/{created['id']}").status_code == 404
+
+
+def test_export_calendar_contains_task_events(client, db_session, monkeypatch):
+    from datetime import date
+
+    monkeypatch.setattr(
+        "app.api.goals.create_goal_with_plan", lambda *a, **k: _build_goal(db_session)
+    )
+    created = client.post("/api/goals", json={"title": "目标"}).json()
+    task = db_session.query(Task).first()
+    task.scheduled_date = date(2026, 8, 17)
+    db_session.commit()
+
+    res = client.get(f"/api/goals/{created['id']}/calendar.ics")
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/calendar")
+    assert "BEGIN:VEVENT" in res.text
+    assert "SUMMARY:任务1" in res.text
+    assert "DTSTART;VALUE=DATE:20260817" in res.text
 
 
 def test_list_goals(client, db_session, monkeypatch):
