@@ -52,5 +52,10 @@ npm.cmd run build
 
 ## 冒烟与评审状态
 
-- 手动冒烟（真实 DeepSeek 调用 + 真实 `learn` 任务）未在本环境执行：需要配置 `DEEPSEEK_API_KEY` 并能访问 DeepSeek API，建议按计划 Task 7 的清单在用户环境完成。
+- 手动冒烟已使用真实 `DEEPSEEK_API_KEY` 完成（本地 uvicorn + 真实 DeepSeek 调用）：
+  - 创建 5 天/每日 2 小时的学习目标，规划成功并产生 `learn` 任务「函数作用域」。
+  - 发起导师会话：返回 `stage=diagnose` 的初始诊断轮；发送一条「请从变量作用域讲起」后推进到 `stage=explain`。
+  - 刷新恢复（GET）返回完整 2 轮历史；以相同 `client_turn_id` 重试不新增轮次。
+  - 检验生成 10 题（`mode=test`）；故意提交错误答案返回 `passed=False / score=0.2 / verified=False`，未通过不完成任务。
+  - 冒烟目标与测试数据已在结束时删除，服务已停止。
 - 独立代码评审已按计划要求执行（从设计提交 `026b77e` 至当前 HEAD 的双轴评审），Critical/Important 发现已在 `73ea445` 修复；评审范围同时覆盖了分支上的时长排程与 UI 改动，未发现需要另行处理的阻断项。
