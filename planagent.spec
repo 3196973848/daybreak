@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
 
-_CONDA_BIN = r"D:\conda\envs\dl2025\Library\bin"
 _CONDA_DLLS = [
     "ffi.dll",
     "LIBBZ2.dll",
@@ -17,6 +17,17 @@ _CONDA_DLLS = [
     "zlib.dll",
 ]
 
+_CONDA_BIN = None
+if sys.platform == "win32":
+    candidates = [
+        os.environ.get("PLANAGENT_CONDA_BIN", ""),
+        r"D:\conda\envs\dl2025\Library\bin",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isdir(candidate):
+            _CONDA_BIN = candidate
+            break
+
 hiddenimports = (
     collect_submodules("uvicorn")
     + collect_submodules("openai")
@@ -28,7 +39,11 @@ hiddenimports = (
 a = Analysis(
     ["backend/run_desktop.py"],
     pathex=["backend"],
-    binaries=[(os.path.join(_CONDA_BIN, dll), ".") for dll in _CONDA_DLLS],
+    binaries=(
+        [(os.path.join(_CONDA_BIN, dll), ".") for dll in _CONDA_DLLS]
+        if _CONDA_BIN
+        else []
+    ),
     datas=[("backend/static", "static")],
     hiddenimports=hiddenimports,
     hookspath=[],

@@ -1,0 +1,71 @@
+name: Build desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare static files
+        shell: bash
+        run: |
+          mkdir -p backend/static
+          cp -R frontend/dist/. backend/static/
+
+      - name: Install backend dependencies and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pyinstaller
+
+      - name: Package PlanAgent
+        run: |
+          python -m PyInstaller planagent.spec --noconfirm
+
+      - name: Assemble release folder
+        shell: bash
+        run: |
+          os="${{ matrix.os }}"
+          dest="release/planagent-$os"
+          mkdir -p "$dest"
+          cp dist/PlanAgent* "$dest/"
+          cp planagent.conf.example "$dest/planagent.conf"
+          cat > "$dest/使用说明.txt" <<'EOF'
+PlanAgent 本地版使用说明
+
+1. 把 PlanAgent（Windows 为 PlanAgent.exe）和 planagent.conf 放在同一个文件夹。
+2. 用文本编辑器打开 planagent.conf，在 PLANAGENT_LLM_API_KEY= 后面填上你自己的
+   DeepSeek API Key（到 https://platform.deepseek.com 获取），保存。
+3. 双击运行。macOS 若提示无法验证开发者：右键点击 → 打开，或在终端执行
+   xattr -dr com.apple.quarantine PlanAgent
+4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
+EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: planagent-${{ matrix.os }}
+          path: release/planagent-${{ matrix.os }}
+          if-no-files-found: error

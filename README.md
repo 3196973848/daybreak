@@ -81,6 +81,13 @@ Copy-Item frontend/dist/* backend/static -Recurse -Force
 .venv_build/Scripts/pyinstaller planagent.spec --noconfirm --clean
 ```
 
+## 自动构建（GitHub Actions）
+
+把仓库推送到 GitHub 后，在 Actions 页面手动触发 **Build desktop packages**，或推送 `v*` 标签自动构建；会同时产出 Windows 与 macOS 两个安装包（在 Actions 的 Artifacts 中下载）。
+
+- macOS 包是未签名可执行文件，首次打开若被系统拦截：右键 → 打开，或执行 `xattr -dr com.apple.quarantine PlanAgent`。
+- 如需 Linux 包，把 workflow 的 `os` 矩阵加上 `ubuntu-latest` 即可。
+
 ## 结构
 - `backend/app/llm` — LLM 编排(计划生成、检验出题/判分)
 - `backend/app/scheduler` — 确定性排程算法
