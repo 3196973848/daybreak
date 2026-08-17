@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -6,6 +8,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+
+
+def pytest_configure(config):
+    if not config.option.basetemp:
+        config.option.basetemp = str(
+            Path(__file__).resolve().parent.parent / ".pytest_tmp"
+        )
 
 
 @pytest.fixture()

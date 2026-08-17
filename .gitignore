@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 .venv/
 *.db
+.pytest_tmp/
 node_modules/
 dist/
