@@ -17,6 +17,7 @@
 | Task 5 学习页（前端） | `d03267b` | LearningPage、DTO、路由（并入 UI 提交） |
 | Task 6 每日任务接入与检验打通 | `36abdd2` | 开始/继续学习入口、检验弹窗、通过态 |
 | pytest 临时目录修复 | `49f51ac` | 项目内 `.pytest_tmp`，默认命令全绿 |
+| 评审修复 | `73ea445` | 见下方「代码评审」 |
 
 ## 自动化验证
 
@@ -39,6 +40,11 @@ npm.cmd run build
 
 `git diff --check` 无空白错误。
 
+## 代码评审（双轴）
+
+- **Standards**：未发现硬性违规。一处判断型坏味道：`api/learning.py::_points` 与 `services/learning_service.py::_load_points` 重复了相同的知识点 JSON 解析逻辑；已删除服务端未使用的 `_load_points`（提交 `73ea445`）。
+- **Spec**：两处与设计稿的偏差已在 `73ea445` 修复——「开始检验」移到页面顶部（返回链接旁）；左侧状态栏补回「当前教学阶段」。其余 spec 需求（入口、恢复、幂等、最近 12 轮上下文、稳定 502、安全 Markdown、检验唯一完成通道）均有测试覆盖。
+
 ## 环境与已知警告
 
 - 为规避本机系统临时目录权限问题，`backend/tests/conftest.py` 将 pytest `tmp_path` 根指向项目内 `.pytest_tmp/`（已加入 `.gitignore`）。
@@ -47,4 +53,4 @@ npm.cmd run build
 ## 冒烟与评审状态
 
 - 手动冒烟（真实 DeepSeek 调用 + 真实 `learn` 任务）未在本环境执行：需要配置 `DEEPSEEK_API_KEY` 并能访问 DeepSeek API，建议按计划 Task 7 的清单在用户环境完成。
-- 独立代码评审尚未执行；计划要求评审从设计提交至当前 HEAD 的范围并解决 Critical/Important 发现，留待可用评审渠道。
+- 独立代码评审已按计划要求执行（从设计提交 `026b77e` 至当前 HEAD 的双轴评审），Critical/Important 发现已在 `73ea445` 修复；评审范围同时覆盖了分支上的时长排程与 UI 改动，未发现需要另行处理的阻断项。
