@@ -21,3 +21,17 @@ These images are shown in the README once they are added to this folder. Capture
 5. Open verification and capture `verification.png`.
 
 Once the files exist here, they can be referenced from the README as `docs/screenshots/<name>.png`.
+
+## Demo GIF
+
+The README showcases a short demo recording (`docs/screenshots/demo.gif`). To create it:
+
+1. Run the app locally, then record 15–30 seconds covering the main flow: home → create a goal → plan overview → daily tasks → tutor chat.
+2. On Windows use `Win + Alt + R` (Xbox Game Bar); save the recording as `docs/screenshots/demo.mp4`.
+3. Convert it with:
+
+```bash
+python scripts/make_demo_gif.py docs/screenshots/demo.mp4 docs/screenshots/demo.gif
+```
+
+The script resizes to 900px wide, ~12 fps, and caps the frame count to keep the GIF small.

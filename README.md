@@ -19,6 +19,7 @@ Turn a vague goal into a concrete daily plan. PlanAgent uses an LLM to break you
 - **Verification**: learning tasks get a fresh 10-question quiz (70/100 to pass); practice/project tasks go through a delivery review. History is stored.
 - **Task-scoped AI tutor**: persistent adaptive conversation (diagnose → explain → practice → remediate → ready), streaming replies, and switchable models.
 - **Local-first**: single-user mode by default, no sign-in required; data lives in a local `planagent.db`.
+- **Bring your own LLM**: switch between DeepSeek, OpenAI, Claude, and local Ollama from the first-run setup wizard.
 - **Packaged desktop apps**: Windows and macOS builds published automatically from GitHub Actions.
 
 ## Screenshots
@@ -28,10 +29,10 @@ Coming soon — see [docs/screenshots](docs/screenshots) for the capture checkli
 ## Quick start (downloaded app)
 
 1. Download the archive for your platform from [Releases](../../releases) (`PlanAgent-v*`).
-2. Unzip, then open `planagent.conf` and put your own DeepSeek API key after `PLANAGENT_LLM_API_KEY=`.
-3. Run the app (Windows: `PlanAgent.exe`; macOS: `PlanAgent`). Your browser opens automatically — no sign-up needed.
+2. Run the app (Windows: `PlanAgent.exe`; macOS: `PlanAgent`). On first launch, a setup wizard walks you through choosing a provider (DeepSeek / OpenAI / Claude / Ollama) and entering your API key.
+3. Start planning. Your browser opens automatically — no sign-up needed.
 
-Your data is stored in `planagent.db` next to the app; back it up by copying that file.
+Your data is stored in `planagent.db` next to the app; back it up by copying that file. The setup wizard writes your provider choice and key to `planagent.conf`.
 
 > macOS: if Gatekeeper blocks the unsigned app, right-click → Open, or run `xattr -dr com.apple.quarantine PlanAgent`.
 
@@ -60,13 +61,14 @@ All settings can be overridden with environment variables prefixed with `PLANAGE
 
 | Variable | Description | Default |
 | --- | --- | --- |
+| `PLANAGENT_LLM_PROVIDER` | Provider: `deepseek` / `openai` / `anthropic` / `ollama` / `custom` | `deepseek` |
 | `PLANAGENT_LLM_API_KEY` / `DEEPSEEK_API_KEY` | DeepSeek API key | empty |
 | `PLANAGENT_LLM_MODEL` | Default model | `deepseek-v4-pro` |
 | `PLANAGENT_LLM_MODELS` | Selectable models (comma-separated) | `deepseek-v4-pro,deepseek-chat,deepseek-reasoner` |
 | `PLANAGENT_AUTH_ENABLED` | Enable account sign-in | `false` |
 | `PLANAGENT_DATABASE_URL` | Database URL | local `planagent.db` |
 
-The desktop build also reads a `planagent.conf` file next to the executable (see `planagent.conf.example`).
+The desktop build also reads a `planagent.conf` file next to the executable (see `planagent.conf.example`). Provider presets also accept the standard environment keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`); local Ollama needs no key.
 
 ## Architecture
 

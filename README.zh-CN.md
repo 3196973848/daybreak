@@ -16,16 +16,17 @@
 - **日历导出**：把计划导出为 iCal 文件，可导入系统日历。
 - **任务检验**：学习任务实时出 10 题（70 分通过），实操/项目走交付评审；检验历史存档。
 - **任务级 AI 导师**：持久化自适应对话（诊断 → 讲解 → 练习 → 补强 → ready），流式回复，可切换模型。
+- **自带 LLM 接入**：支持 DeepSeek、OpenAI、Claude 与本地 Ollama，首次运行引导页选择提供方并填写 Key。
 - **本地优先**：默认本地单用户、无需登录；数据保存在本地 `planagent.db`。
 - **多端打包**：Windows / macOS 桌面版，GitHub Actions 自动构建发布。
 
 ## 快速开始（下载版）
 
 1. 从 [GitHub Releases](../../releases) 下载对应平台的压缩包（`PlanAgent-v*` 标签）。
-2. 解压后，用文本编辑器打开 `planagent.conf`，在 `PLANAGENT_LLM_API_KEY=` 后填入你自己的 DeepSeek API Key，保存。
-3. 双击运行（Windows：`PlanAgent.exe`；macOS：`PlanAgent`），浏览器会自动打开，无需登录。
+2. 双击运行（Windows：`PlanAgent.exe`；macOS：`PlanAgent`）。首次启动会进入引导页，选择提供方（DeepSeek / OpenAI / Claude / Ollama）并填写 API Key。
+3. 保存后即可开始规划，浏览器自动打开、无需登录。
 
-数据保存在程序同目录的 `planagent.db`，备份时复制该文件即可。
+数据保存在程序同目录的 `planagent.db`，备份时复制该文件即可。引导页会把提供方与 Key 写回 `planagent.conf`。
 
 > macOS 首次打开若提示无法验证开发者：右键点击 → 打开，或执行 `xattr -dr com.apple.quarantine PlanAgent`。
 
@@ -54,6 +55,7 @@ npm run dev   # http://localhost:5173（已代理 /api 到 :8000）
 
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
+| `PLANAGENT_LLM_PROVIDER` | 提供方：`deepseek` / `openai` / `anthropic` / `ollama` / `custom` | `deepseek` |
 | `PLANAGENT_LLM_API_KEY` / `DEEPSEEK_API_KEY` | DeepSeek API Key | 空 |
 | `PLANAGENT_LLM_MODEL` | 默认模型 | `deepseek-v4-pro` |
 | `PLANAGENT_LLM_MODELS` | 可选模型列表（逗号分隔） | `deepseek-v4-pro,deepseek-chat,deepseek-reasoner` |
@@ -76,7 +78,7 @@ npm run dev   # http://localhost:5173（已代理 /api 到 :8000）
 
 学习类任务会显示「开始学习 / 继续学习」入口，进入任务级 AI 导师对话页。导师按「诊断 → 讲解 → 练习 → 补强 → ready」自适应推进，并持久化完整对话历史；刷新后可从上次进度继续，同一客户端消息不会重复调用模型。回复为流式输出，并可在左侧选择模型。
 
-导师复用 DeepSeek 配置，只接收滚动摘要和最近 12 轮对话。`ready_for_verification` 仅为建议，不直接完成任务；任务仍由原有检验流程判定（学习任务为 10 题、总分 70 分通过），通过后才会标记完成。
+导师复用当前选定的 LLM 提供方（DeepSeek / OpenAI / Claude / Ollama），只接收滚动摘要和最近 12 轮对话；输入框按 Enter 发送、Shift+Enter 换行。`ready_for_verification` 仅为建议，不直接完成任务；任务仍由原有检验流程判定（学习任务为 10 题、总分 70 分通过），通过后才会标记完成。
 
 当前版本不包含联网检索、文件上传、语音、多用户或全局导师。
 
