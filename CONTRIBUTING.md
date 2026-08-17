@@ -1,0 +1,23 @@
+# 贡献指南
+
+欢迎参与 PlanAgent 的开发。请遵循下面的约定，减少来回沟通成本。
+
+## 分支与提交
+
+- 开发请在独立分支或工作树进行，合入前保持提交历史线性、可读。
+- 提交信息使用小写开头的祈使句，例如 `feat: add task completion`、`fix: migrate legacy databases`。
+- 每个逻辑变更单独提交，不要混入无关改动。
+
+## 开发流程
+
+1. 先在 `docs/superpowers/` 查看或补充设计/计划文档。
+2. 遵循 TDD：先写失败测试，再实现，最后跑全量验证。
+3. 后端测试：`cd backend && python -m pytest`
+4. 前端测试与构建：`cd frontend && npm test && npm run build`
+5. 提交前执行 `git diff --check` 并确认没有遗留调试代码。
+
+## 合并请求
+
+- 说明改了什么、为什么、如何验证。
+- 如果涉及外部依赖或新配置项，在 README 中同步说明。
+- 保持改动聚焦；大功能请先开 issue 讨论。
