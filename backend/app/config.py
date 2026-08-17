@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     auth_secret: str = ""
     auth_session_ttl_days: int = 30
     auth_cookie_secure: bool = False
-    auth_enabled: bool = True
+    auth_enabled: bool = False
 
 
 settings = Settings()

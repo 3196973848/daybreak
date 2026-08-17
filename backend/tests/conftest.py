@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth import get_current_user
+from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
@@ -17,6 +18,13 @@ def pytest_configure(config):
         config.option.basetemp = str(
             Path(__file__).resolve().parent.parent / ".pytest_tmp"
         )
+
+
+@pytest.fixture(autouse=True)
+def _auth_enabled_for_tests():
+    settings.auth_enabled = True
+    yield
+    settings.auth_enabled = False
 
 
 @pytest.fixture()

@@ -14,6 +14,7 @@ from ..auth import (
 )
 from ..database import get_db
 from ..models import Goal, User
+from ..config import settings
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -91,4 +92,4 @@ def logout(response: Response):
 
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return _user_dict(user)
+    return {**_user_dict(user), "auth_enabled": settings.auth_enabled}

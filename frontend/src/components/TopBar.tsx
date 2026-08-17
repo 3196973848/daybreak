@@ -24,7 +24,7 @@ export function TopBar({
           返回
         </Link>
       )}
-      {user && (
+      {user && user.auth_enabled !== false && (
         <button className="btn-ghost" onClick={() => void logout()}>
           {user.username} · 退出
         </button>

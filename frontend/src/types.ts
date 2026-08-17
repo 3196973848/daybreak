@@ -43,6 +43,7 @@ export interface UserDTO {
   id: number
   username: string
   created_at: string
+  auth_enabled?: boolean
 }
 
 export interface TestQuestionDTO {

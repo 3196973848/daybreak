@@ -58,7 +58,7 @@ docker compose up -d --build
 - 应用监听 `8000`；前端静态文件由后端一并托管，`/` 与子路由都指向 SPA。
 - 数据保存在 Docker 卷 `planagent-data`（SQLite），升级容器不丢数据。
 - 对外公开请在前面加 HTTPS 反向代理（Caddy / Nginx），`PLANAGENT_AUTH_COOKIE_SECURE=true` 已在 compose 中设置。
-- 第一个注册的账号会自动接管升级前遗留的单用户数据。
+- 默认是本地单用户模式（`PLANAGENT_AUTH_ENABLED=false`），无需登录；若需多账号，设置 `PLANAGENT_AUTH_ENABLED=true` 并恢复登录页路由。
 
 ## 本地分发（Windows exe）
 
