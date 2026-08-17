@@ -106,6 +106,21 @@ def test_tutor_streamer_rejects_invalid_output():
         list(streamer)
 
 
+def test_tutor_streamer_handles_character_by_character_chunks():
+    text = (
+        '{"reply": "你好", "stage": "explain", "session_summary": "s",'
+        ' "covered_points": ["a"], "weak_points": [], "ready_for_verification": false}'
+    )
+    client = _stream_client([char for char in text])
+    streamer = _streamer([char for char in text], client=client)
+
+    pieces = list(streamer)
+
+    assert "".join(pieces) == "你好"
+    assert streamer.output is not None
+    assert streamer.output.stage == "explain"
+
+
 class FakeMessage:
     def __init__(self, content):
         self.content = content

@@ -149,16 +149,20 @@ class _ReplyExtractor:
             if index == -1:
                 self.buf = self.buf[-8:]
                 return "".join(emitted)
-            after = self.buf[index + 7:].lstrip(" \t\r\n")
-            if not after.startswith(":"):
+            stripped = self.buf[index + 7:].lstrip(" \t\r\n")
+            if stripped == "":
+                return "".join(emitted)
+            if not stripped.startswith(":"):
                 self.buf = self.buf[index + 7:]
                 continue
-            after = after[1:].lstrip(" \t\r\n")
-            if not after.startswith('"'):
-                self.buf = after
+            rest = stripped[1:].lstrip(" \t\r\n")
+            if rest == "":
+                return "".join(emitted)
+            if not rest.startswith('"'):
+                self.buf = rest
                 continue
             self.started = True
-            self.buf = after[1:]
+            self.buf = rest[1:]
 
         index = 0
         while index < len(self.buf):
