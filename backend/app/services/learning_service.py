@@ -69,14 +69,6 @@ def _session_turns(db: Session, session: LearningSession) -> list[LearningTurn]:
         _raise_read_error(db)
 
 
-def _load_points(value: str) -> list[str]:
-    try:
-        points = json.loads(value)
-    except (TypeError, json.JSONDecodeError):
-        return []
-    return points if isinstance(points, list) and all(isinstance(point, str) for point in points) else []
-
-
 def _tutor_context(turns: list[LearningTurn]) -> list[dict[str, str | None]]:
     return [
         {

@@ -15,6 +15,14 @@ const STAGE_ORDER: Array<{ key: LearningStage; label: string }> = [
   { key: 'ready', label: 'ready' },
 ]
 
+const STAGE_LABELS: Record<LearningStage, string> = {
+  diagnose: '诊断',
+  explain: '讲解',
+  practice: '练习',
+  remediate: '补强',
+  ready: '已准备好',
+}
+
 interface PendingSubmission {
   client_turn_id: string
   message: string
@@ -158,9 +166,20 @@ export function LearningPage() {
         {session && (
           <>
             <header className="learning-header">
-              <p className="learning-eyebrow">AI 导师</p>
-              <h1>{session.task_title}</h1>
-              {session.task_description && <p>{session.task_description}</p>}
+              <div className="learning-header-top">
+                <div>
+                  <p className="learning-eyebrow">AI 导师</p>
+                  <h1>{session.task_title}</h1>
+                  {session.task_description && <p>{session.task_description}</p>}
+                </div>
+                <button
+                  className="btn learning-verify-button"
+                  disabled={verificationPassed}
+                  onClick={() => setVerificationTask(taskFromSession(session))}
+                >
+                  {verificationPassed ? '检验已通过' : '开始检验'}
+                </button>
+              </div>
               <div className="stage" aria-label="学习阶段">
                 {STAGE_ORDER.map((item, index) => (
                   <Fragment key={item.key}>
@@ -178,6 +197,10 @@ export function LearningPage() {
               <aside className="card learning-status-card" aria-label="学习状态">
                 <h2>学习状态</h2>
                 <dl className="learning-status-summary">
+                  <div>
+                    <dt>当前阶段</dt>
+                    <dd>{STAGE_LABELS[session.stage]}</dd>
+                  </div>
                   <div>
                     <dt>预计时长</dt>
                     <dd>{session.estimated_hours_snapshot} 小时</dd>
@@ -198,18 +221,9 @@ export function LearningPage() {
                   ) : <p>暂未发现</p>}
                 </section>
 
-                <div className="learning-verify">
-                  {session.ready_for_verification && !verificationPassed && (
-                    <p className="learning-ready">建议开始检验</p>
-                  )}
-                  <button
-                    className="btn"
-                    disabled={verificationPassed}
-                    onClick={() => setVerificationTask(taskFromSession(session))}
-                  >
-                    {verificationPassed ? '检验已通过' : '开始检验'}
-                  </button>
-                </div>
+                {session.ready_for_verification && !verificationPassed && (
+                  <p className="learning-ready">建议开始检验</p>
+                )}
               </aside>
 
               <main className="card learning-chat" aria-label="导师对话">

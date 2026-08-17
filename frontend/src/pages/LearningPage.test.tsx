@@ -93,7 +93,7 @@ describe('LearningPage', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: '理解 JavaScript 闭包' })).toBeTruthy()
-    expect(screen.getByText('讲解')).toBeTruthy()
+    expect(screen.getAllByText('讲解').length).toBeGreaterThan(0)
     expect(screen.getByText('1.5 小时')).toBeTruthy()
     expect(screen.getByText('词法作用域')).toBeTruthy()
     expect(screen.getByText('函数返回函数')).toBeTruthy()

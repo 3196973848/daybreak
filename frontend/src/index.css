@@ -905,6 +905,15 @@ textarea.input { resize: vertical; min-height: 72px; }
 
 .learning-header { margin-bottom: 20px; }
 
+.learning-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.learning-verify-button { flex-shrink: 0; }
+
 .learning-header h1 {
   margin: 5px 0 8px;
   font-family: var(--font-display);
@@ -913,7 +922,7 @@ textarea.input { resize: vertical; min-height: 72px; }
   font-weight: 700;
 }
 
-.learning-header > p:last-child { margin: 0; color: var(--text-dim); }
+.learning-header-top p { margin: 0; color: var(--text-dim); }
 
 .learning-eyebrow {
   margin: 0;
@@ -943,7 +952,7 @@ textarea.input { resize: vertical; min-height: 72px; }
 
 .learning-status-summary {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 16px 0 20px;
 }
@@ -983,15 +992,6 @@ textarea.input { resize: vertical; min-height: 72px; }
   font-size: 13px;
   font-weight: 700;
 }
-
-.learning-verify {
-  display: grid;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.learning-verify .learning-ready { margin: 0; }
-.learning-verify .btn { width: 100%; }
 
 .learning-chat { min-width: 0; overflow: hidden; }
 .learning-turns { display: grid; gap: 16px; padding: 20px; }
