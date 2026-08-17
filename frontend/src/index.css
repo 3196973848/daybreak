@@ -984,6 +984,15 @@ textarea.input { resize: vertical; min-height: 72px; }
   font-weight: 700;
 }
 
+.learning-verify {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.learning-verify .learning-ready { margin: 0; }
+.learning-verify .btn { width: 100%; }
+
 .learning-chat { min-width: 0; overflow: hidden; }
 .learning-turns { display: grid; gap: 16px; padding: 20px; }
 .learning-turn { display: grid; gap: 10px; }

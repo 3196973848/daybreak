@@ -12,6 +12,7 @@ vi.mock('../api/client', () => ({
   api: {
     getGoal: vi.fn(),
     setTaskCompleted: vi.fn(),
+    getLearningSession: vi.fn(),
   },
 }))
 
@@ -56,6 +57,19 @@ describe('DailyTasks completion control', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockedApi.getGoal.mockResolvedValue(goal)
+    mockedApi.getLearningSession.mockResolvedValue({
+      id: 41,
+      task_id: 7,
+      goal_id: 1,
+      task_title: '理解闭包',
+      task_description: '',
+      stage: 'diagnose',
+      covered_points: [],
+      weak_points: [],
+      ready_for_verification: false,
+      estimated_hours_snapshot: 1,
+      turns: [],
+    })
     mockedApi.setTaskCompleted.mockResolvedValue({
       ...task,
       status: 'done',
@@ -102,5 +116,57 @@ describe('DailyTasks completion control', () => {
       expect(style.color).toBe('rgb(23, 23, 23)')
     })
     expect(mockedApi.setTaskCompleted).toHaveBeenCalledWith(7, true)
+  })
+
+  it('shows a start-learning link for a learn task without a session', async () => {
+    const learnTask: TaskDTO = { ...task, id: 7, type: 'learn', title: '理解闭包' }
+    mockedApi.getGoal.mockResolvedValue({
+      ...goal,
+      plan: {
+        ...goal.plan!,
+        milestones: [{ ...goal.plan!.milestones[0], tasks: [learnTask] }],
+      },
+    })
+    mockedApi.getLearningSession.mockRejectedValue(new Error('not found'))
+
+    render(
+      <MemoryRouter initialEntries={['/goals/1/daily']}>
+        <Routes><Route path="/goals/:id/daily" element={<DailyTasks />} /></Routes>
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByRole('link', { name: '开始学习' })
+    expect(link.getAttribute('href')).toBe('/tasks/7/learn')
+  })
+
+  it('labels an existing learning session as continue', async () => {
+    const learnTask: TaskDTO = { ...task, id: 7, type: 'learn', title: '理解闭包' }
+    mockedApi.getGoal.mockResolvedValue({
+      ...goal,
+      plan: {
+        ...goal.plan!,
+        milestones: [{ ...goal.plan!.milestones[0], tasks: [learnTask] }],
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/goals/1/daily']}>
+        <Routes><Route path="/goals/:id/daily" element={<DailyTasks />} /></Routes>
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByRole('link', { name: '继续学习' })
+    expect(link.getAttribute('href')).toBe('/tasks/7/learn')
+  })
+
+  it('renders no learning link for practice tasks', async () => {
+    render(
+      <MemoryRouter initialEntries={['/goals/1/daily']}>
+        <Routes><Route path="/goals/:id/daily" element={<DailyTasks />} /></Routes>
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('button', { name: '标记完成' })
+    expect(screen.queryByRole('link', { name: /学习/ })).toBeNull()
   })
 })

@@ -4,7 +4,8 @@ import { useParams } from 'react-router-dom'
 
 import { api, ApiError } from '../api/client'
 import { TopBar } from '../components/TopBar'
-import type { LearningSessionDTO, LearningStage } from '../types'
+import { VerificationModal } from '../components/VerificationModal'
+import type { LearningSessionDTO, LearningStage, TaskDTO } from '../types'
 
 const STAGE_ORDER: Array<{ key: LearningStage; label: string }> = [
   { key: 'diagnose', label: '诊断' },
@@ -23,6 +24,21 @@ function messageFrom(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
 }
 
+function taskFromSession(session: LearningSessionDTO): TaskDTO {
+  return {
+    id: session.task_id,
+    title: session.task_title,
+    description: session.task_description,
+    type: 'learn',
+    scheduled_date: null,
+    effort: session.estimated_hours_snapshot,
+    order: 0,
+    status: 'todo',
+    verified: false,
+    completed_at: null,
+  }
+}
+
 export function LearningPage() {
   const { taskId } = useParams()
   const numericTaskId = Number(taskId)
@@ -33,6 +49,8 @@ export function LearningPage() {
   const [sending, setSending] = useState(false)
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState<PendingSubmission | null>(null)
+  const [verificationTask, setVerificationTask] = useState<TaskDTO | null>(null)
+  const [verificationPassed, setVerificationPassed] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -44,6 +62,8 @@ export function LearningPage() {
     setSending(false)
     setDraft('')
     setPending(null)
+    setVerificationTask(null)
+    setVerificationPassed(false)
     setError('')
 
     async function load() {
@@ -127,7 +147,7 @@ export function LearningPage() {
     <>
       <TopBar
         title={session?.task_title ?? '导师学习'}
-        backTo={session ? `/goals/${session.goal_id}` : undefined}
+        backTo={session ? `/goals/${session.goal_id}/daily` : undefined}
       />
       <div className="page learning-page">
         {liveStatus && (
@@ -178,9 +198,18 @@ export function LearningPage() {
                   ) : <p>暂未发现</p>}
                 </section>
 
-                {session.ready_for_verification && (
-                  <p className="learning-ready">建议开始检验</p>
-                )}
+                <div className="learning-verify">
+                  {session.ready_for_verification && !verificationPassed && (
+                    <p className="learning-ready">建议开始检验</p>
+                  )}
+                  <button
+                    className="btn"
+                    disabled={verificationPassed}
+                    onClick={() => setVerificationTask(taskFromSession(session))}
+                  >
+                    {verificationPassed ? '检验已通过' : '开始检验'}
+                  </button>
+                </div>
               </aside>
 
               <main className="card learning-chat" aria-label="导师对话">
@@ -237,6 +266,16 @@ export function LearningPage() {
               </main>
             </div>
           </>
+        )}
+
+        {verificationTask && (
+          <VerificationModal
+            task={verificationTask}
+            onClose={() => setVerificationTask(null)}
+            onVerified={(result) => {
+              if (result.passed) setVerificationPassed(true)
+            }}
+          />
         )}
       </div>
     </>

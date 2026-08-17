@@ -16,6 +16,8 @@ vi.mock('../api/client', async (importOriginal) => {
       getLearningSession: vi.fn(),
       startLearningSession: vi.fn(),
       sendLearningTurn: vi.fn(),
+      getVerification: vi.fn(),
+      submitVerification: vi.fn(),
     },
   }
 })
@@ -282,5 +284,65 @@ describe('LearningPage', () => {
     expect(status).toBeTruthy()
     expect(chat).toBeTruthy()
     expect(status.compareDocumentPosition(chat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('opens the verification modal and returns to daily tasks', async () => {
+    const user = userEvent.setup()
+    mockedApi.getVerification.mockResolvedValue({
+      mode: 'test',
+      record_id: 42,
+      content: { questions: [] },
+    })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '开始检验' }))
+
+    expect(await screen.findByText('检验 · 理解 JavaScript 闭包')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '返回' }).getAttribute('href')).toBe('/goals/3/daily')
+  })
+
+  it('marks verification passed and disables the action', async () => {
+    const user = userEvent.setup()
+    mockedApi.getVerification.mockResolvedValue({
+      mode: 'test',
+      record_id: 42,
+      content: { questions: [] },
+    })
+    mockedApi.submitVerification.mockResolvedValue({
+      passed: true,
+      score: 1,
+      feedback: '通过',
+      verified: true,
+    })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '开始检验' }))
+    await user.click(await screen.findByRole('button', { name: '提交检验' }))
+
+    const done = await screen.findByRole('button', { name: '检验已通过' })
+    expect((done as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('does not claim completion after a failed verification', async () => {
+    const user = userEvent.setup()
+    mockedApi.getVerification.mockResolvedValue({
+      mode: 'test',
+      record_id: 42,
+      content: { questions: [] },
+    })
+    mockedApi.submitVerification.mockResolvedValue({
+      passed: false,
+      score: 0.4,
+      feedback: '未通过',
+      verified: false,
+    })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '开始检验' }))
+    await user.click(await screen.findByRole('button', { name: '提交检验' }))
+
+    expect(await screen.findByText('✗ 未通过')).toBeTruthy()
+    expect(screen.queryByText('检验已通过')).toBeNull()
+    expect(screen.getByRole('button', { name: '开始检验' })).toBeTruthy()
   })
 })

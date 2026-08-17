@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GoalDTO, TaskDTO } from '../types'
 import { Calendar } from '../components/Calendar'
@@ -25,6 +25,8 @@ export function DailyTasks() {
   const [goal, setGoal] = useState<GoalDTO | null>(null)
   const [selected, setSelected] = useState(todayLocal)
   const [verifyTask, setVerifyTask] = useState<TaskDTO | null>(null)
+  const [learningStates, setLearningStates] = useState<Record<number, boolean>>({})
+  const checkedLearning = useRef<Set<number>>(new Set())
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -33,6 +35,25 @@ export function DailyTasks() {
   }, [id])
 
   const tasks = useMemo(() => (goal?.plan ? goal.plan.milestones.flatMap((m) => m.tasks) : []), [goal])
+
+  useEffect(() => {
+    let active = true
+    for (const task of tasks) {
+      if (task.type !== 'learn' || checkedLearning.current.has(task.id)) continue
+      checkedLearning.current.add(task.id)
+      api.getLearningSession(task.id)
+        .then(() => {
+          if (active) setLearningStates((states) => ({ ...states, [task.id]: true }))
+        })
+        .catch(() => {
+          if (active) setLearningStates((states) => ({ ...states, [task.id]: false }))
+        })
+    }
+    return () => {
+      active = false
+    }
+  }, [tasks])
+
   const datesWithTasks = useMemo(
     () => new Set(tasks.map((t) => toKey(t.scheduled_date))),
     [tasks],
@@ -119,6 +140,12 @@ export function DailyTasks() {
                   <IconClipboard size={14} />
                   检验
                 </button>
+
+                {t.type === 'learn' && (
+                  <Link to={`/tasks/${t.id}/learn`} className="btn-ghost">
+                    {learningStates[t.id] ? '继续学习' : '开始学习'}
+                  </Link>
+                )}
               </div>
             ))}
           </div>
