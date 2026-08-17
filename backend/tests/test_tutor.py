@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.llm.tutor import TutorOutput, generate_tutor_turn
+from app.llm.tutor import TutorOutput, TutorTurnStreamer, generate_tutor_turn
 
 
 def tutor_payload(**overrides):
@@ -17,6 +17,93 @@ def tutor_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+def _stream_chunk(content):
+    class Delta:
+        def __init__(self, text):
+            self.content = text
+
+    class Choice:
+        def __init__(self, text):
+            self.delta = Delta(text)
+
+    class ChatChunk:
+        def __init__(self, text):
+            self.choices = [Choice(text)]
+
+    return ChatChunk(content)
+
+
+def _stream_client(chunks):
+    class Completions:
+        def __init__(self):
+            self.calls = []
+
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            return [_stream_chunk(chunk) for chunk in chunks]
+
+    class Chat:
+        def __init__(self):
+            self.completions = Completions()
+
+    class Client:
+        def __init__(self):
+            self.chat = Chat()
+
+    return Client()
+
+
+def _streamer(chunks, **overrides):
+    params = {
+        "task_title": "任务",
+        "task_description": "",
+        "estimated_hours": 1.0,
+        "previous_summary": "",
+        "recent_turns": [],
+        "user_message": "继续",
+        "already_ready": False,
+    }
+    params.update(overrides)
+    return TutorTurnStreamer(**params)
+
+
+def test_tutor_streamer_extracts_and_streams_reply_chunks():
+    chunks = [
+        '{"rep',
+        'ly": "你好',
+        '，世界", "stage": "explain", "session_summary": "s",',
+        ' "covered_points": ["a"], "weak_points": ["b"], "ready_for_verification": false}',
+    ]
+    client = _stream_client(chunks)
+    streamer = _streamer(chunks, client=client)
+
+    pieces = list(streamer)
+
+    assert "".join(pieces) == "你好，世界"
+    assert streamer.output is not None
+    assert streamer.output.reply == "你好，世界"
+    assert streamer.output.stage == "explain"
+
+
+def test_tutor_streamer_uses_selected_model():
+    client = _stream_client([
+        '{"reply": "ok", "stage": "explain", "session_summary": "s",',
+        ' "covered_points": ["a"], "weak_points": [], "ready_for_verification": false}',
+    ])
+    streamer = _streamer([], client=client, model="deepseek-chat")
+
+    list(streamer)
+
+    assert client.chat.completions.calls[0]["model"] == "deepseek-chat"
+
+
+def test_tutor_streamer_rejects_invalid_output():
+    streamer = _streamer(['{"reply": "hi", "stage": "explain"'], client=_stream_client([]))
+
+    with pytest.raises(RuntimeError, match="导师暂时无法生成有效回复"):
+        list(streamer)
 
 
 class FakeMessage:

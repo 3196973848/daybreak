@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     hours_per_block: float = 1.0
     # LLM 配置(DeepSeek,OpenAI 兼容接口)
     llm_model: str = "deepseek-v4-pro"
+    llm_models: str = "deepseek-v4-pro,deepseek-chat,deepseek-reasoner"
     llm_base_url: str = "https://api.deepseek.com"
     llm_api_key: str = Field(
         default="",
@@ -36,6 +37,14 @@ class Settings(BaseSettings):
     auth_session_ttl_days: int = 30
     auth_cookie_secure: bool = False
     auth_enabled: bool = False
+
+    @property
+    def available_models(self) -> list[str]:
+        return [
+            model.strip()
+            for model in self.llm_models.split(",")
+            if model.strip()
+        ]
 
 
 settings = Settings()

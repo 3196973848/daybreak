@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import Iterator, Literal
 
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -95,6 +95,7 @@ def generate_tutor_turn(
     recent_turns: list[dict[str, str | None]],
     user_message: str | None,
     already_ready: bool,
+    model: str | None = None,
     client=None,
 ) -> TutorOutput:
     user_payload = _user_payload(
@@ -110,7 +111,7 @@ def generate_tutor_turn(
         prompt = user_payload if attempt == 0 else f"{user_payload}\n{RETRY_INSTRUCTION}"
         try:
             response = llm_client.chat.completions.create(
-                model=settings.llm_model,
+                model=model or settings.llm_model,
                 max_tokens=4000,
                 messages=[
                     {"role": "system", "content": TUTOR_SYSTEM_PROMPT},
@@ -130,3 +131,140 @@ def generate_tutor_turn(
         except Exception:
             continue
     raise RuntimeError(FINAL_ERROR)
+
+
+class _ReplyExtractor:
+    """Extracts the reply string from a streaming JSON response."""
+
+    def __init__(self) -> None:
+        self.buf = ""
+        self.started = False
+        self.escape = False
+
+    def feed(self, text: str) -> str:
+        self.buf += text
+        emitted: list[str] = []
+        while not self.started:
+            index = self.buf.find('"reply"')
+            if index == -1:
+                self.buf = self.buf[-8:]
+                return "".join(emitted)
+            after = self.buf[index + 7:].lstrip(" \t\r\n")
+            if not after.startswith(":"):
+                self.buf = self.buf[index + 7:]
+                continue
+            after = after[1:].lstrip(" \t\r\n")
+            if not after.startswith('"'):
+                self.buf = after
+                continue
+            self.started = True
+            self.buf = after[1:]
+
+        index = 0
+        while index < len(self.buf):
+            char = self.buf[index]
+            if self.escape:
+                if char == "n":
+                    emitted.append("\n")
+                elif char == "t":
+                    emitted.append("\t")
+                elif char == "r":
+                    emitted.append("\r")
+                elif char == "b":
+                    emitted.append("\b")
+                elif char == "f":
+                    emitted.append("\f")
+                elif char == "u":
+                    hex_part = self.buf[index + 1:index + 5]
+                    if len(hex_part) == 4 and all(
+                        c in "0123456789abcdefABCDEF" for c in hex_part
+                    ):
+                        emitted.append(chr(int(hex_part, 16)))
+                        index += 4
+                    else:
+                        emitted.append("u")
+                else:
+                    emitted.append(char)
+                self.escape = False
+            elif char == "\\":
+                self.escape = True
+            elif char == '"':
+                self.started = False
+                self.buf = self.buf[index + 1:]
+                return "".join(emitted)
+            else:
+                emitted.append(char)
+            index += 1
+        self.buf = ""
+        return "".join(emitted)
+
+
+class TutorTurnStreamer:
+    """Streams tutor reply chunks, then validates the full structured output."""
+
+    def __init__(
+        self,
+        *,
+        task_title: str,
+        task_description: str,
+        estimated_hours: float,
+        previous_summary: str,
+        recent_turns: list[dict[str, str | None]],
+        user_message: str | None,
+        already_ready: bool,
+        model: str | None = None,
+        client=None,
+    ) -> None:
+        self.raw = ""
+        self.output: TutorOutput | None = None
+        self._extractor = _ReplyExtractor()
+        self._params = {
+            "task_title": task_title,
+            "task_description": task_description,
+            "estimated_hours": estimated_hours,
+            "previous_summary": previous_summary,
+            "recent_turns": recent_turns,
+            "user_message": user_message,
+            "already_ready": already_ready,
+            "model": model,
+            "client": client,
+        }
+
+    def __iter__(self) -> Iterator[str]:
+        user_payload = _user_payload(
+            task_title=self._params["task_title"],
+            task_description=self._params["task_description"],
+            estimated_hours=self._params["estimated_hours"],
+            previous_summary=self._params["previous_summary"],
+            recent_turns=self._params["recent_turns"],
+            user_message=self._params["user_message"],
+        )
+        response = _client(self._params["client"]).chat.completions.create(
+            model=self._params["model"] or settings.llm_model,
+            max_tokens=4000,
+            messages=[
+                {"role": "system", "content": TUTOR_SYSTEM_PROMPT},
+                {"role": "user", "content": user_payload},
+            ],
+            response_format={"type": "json_object"},
+            stream=True,
+        )
+        for chunk in response:
+            content = chunk.choices[0].delta.content
+            if not isinstance(content, str) or not content:
+                continue
+            self.raw += content
+            piece = self._extractor.feed(content)
+            if piece:
+                yield piece
+        self.output = self._finalize()
+
+    def _finalize(self) -> TutorOutput:
+        if not self.raw.strip():
+            raise RuntimeError(FINAL_ERROR)
+        output = TutorOutput.model_validate(json.loads(self.raw))
+        if self._params["user_message"] is None and output.stage != "diagnose":
+            raise RuntimeError(FINAL_ERROR)
+        if self._params["already_ready"] and not output.ready_for_verification:
+            output = output.model_copy(update={"ready_for_verification": True})
+        return output

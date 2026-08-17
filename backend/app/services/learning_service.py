@@ -1,10 +1,11 @@
 import json
 from threading import Lock
+from typing import Iterator
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
-from ..llm.tutor import generate_tutor_turn
+from ..llm.tutor import TutorTurnStreamer, generate_tutor_turn
 from ..models import LearningSession, LearningTurn, Task
 
 
@@ -87,6 +88,7 @@ def _generate(
     recent_turns: list[dict[str, str | None]],
     user_message: str | None,
     already_ready: bool,
+    model: str | None = None,
 ):
     try:
         return generate_tutor_turn(
@@ -97,6 +99,7 @@ def _generate(
             recent_turns=recent_turns,
             user_message=user_message,
             already_ready=already_ready,
+            model=model,
         )
     except RuntimeError:
         raise LearningGenerationError("Tutor response generation failed.") from None
@@ -162,7 +165,8 @@ def start_learning_session(db: Session, task_id: int) -> LearningSession:
 
 
 def _add_learning_turn(
-    db: Session, task_id: int, client_turn_id: str, message: str
+    db: Session, task_id: int, client_turn_id: str, message: str,
+    model: str | None = None,
 ) -> tuple[LearningSession, LearningTurn]:
     task = _learning_task(db, task_id)
     session = _session_for_task(db, task)
@@ -193,7 +197,18 @@ def _add_learning_turn(
         recent_turns=recent_turns,
         user_message=message,
         already_ready=already_ready,
+        model=model,
     )
+    return _persist_turn(db, session, client_turn_id, message, output)
+
+
+def _persist_turn(
+    db: Session,
+    session: LearningSession,
+    client_turn_id: str,
+    message: str,
+    output,
+) -> tuple[LearningSession, LearningTurn]:
     turn = LearningTurn(
         session_id=session.id,
         client_turn_id=client_turn_id,
@@ -220,10 +235,61 @@ def _add_learning_turn(
 
 
 def add_learning_turn(
-    db: Session, task_id: int, client_turn_id: str, message: str
+    db: Session, task_id: int, client_turn_id: str, message: str,
+    model: str | None = None,
 ) -> tuple[LearningSession, LearningTurn]:
     with _task_lock(task_id):
-        return _add_learning_turn(db, task_id, client_turn_id, message)
+        return _add_learning_turn(db, task_id, client_turn_id, message, model)
+
+
+def stream_learning_turn_events(
+    db: Session,
+    task_id: int,
+    client_turn_id: str,
+    message: str,
+    model: str | None = None,
+) -> Iterator[tuple[str, object]]:
+    with _task_lock(task_id):
+        task = _learning_task(db, task_id)
+        session = _session_for_task(db, task)
+        if session is None:
+            raise LearningSessionNotFound("Learning session was not found.")
+        turns = _session_turns(db, session)
+        existing = next(
+            (turn for turn in turns if turn.client_turn_id == client_turn_id), None
+        )
+        if existing is not None:
+            yield ("done", (session, existing))
+            return
+        if not isinstance(message, str) or not (message := message.strip()):
+            raise ValueError("Learning message must not be blank.")
+        try:
+            estimated_hours = session.estimated_hours_snapshot
+            previous_summary = session.session_summary
+            recent_turns = _tutor_context(turns[-12:])
+            already_ready = session.ready_for_verification
+        except Exception:
+            _raise_read_error(db)
+        streamer = TutorTurnStreamer(
+            task_title=task.title,
+            task_description=task.description,
+            estimated_hours=estimated_hours,
+            previous_summary=previous_summary,
+            recent_turns=recent_turns,
+            user_message=message,
+            already_ready=already_ready,
+            model=model,
+        )
+        try:
+            for piece in streamer:
+                yield ("reply", piece)
+            output = streamer.output
+        except Exception:
+            raise LearningGenerationError("Tutor response generation failed.") from None
+        if output is None:
+            raise LearningGenerationError("Tutor response generation failed.") from None
+        session, turn = _persist_turn(db, session, client_turn_id, message, output)
+        yield ("done", (session, turn))
 
 
 def goal_id_for(session: LearningSession) -> int:

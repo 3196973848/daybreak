@@ -2,7 +2,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import sessionmaker
 
+from app.api.learning import LearningSessionResponse
 from app.llm.tutor import TutorOutput
 from app.models import Goal, LearningSession, LearningTurn, Milestone, Plan, Task, User
 
@@ -303,3 +305,60 @@ def test_create_turn_maps_persistence_failure_without_partial_rows_and_can_retry
     )
     assert recovered.status_code == 200
     assert recovered.json()["turns"][-1]["client_turn_id"] == client_turn_id
+
+
+def test_stream_turn_yields_reply_and_done_events(client, db_session, monkeypatch):
+    task = _task(db_session)
+
+    def fake_events(db, task_id, client_turn_id, message, model=None):
+        yield ("reply", "你好")
+        yield ("reply", "，世界")
+        yield ("done", (object(), None))
+
+    monkeypatch.setattr("app.api.learning.stream_learning_turn_events", fake_events)
+    monkeypatch.setattr(
+        "app.api.learning.SessionLocal",
+        lambda: sessionmaker(
+            bind=db_session.get_bind(), autoflush=False, expire_on_commit=False
+        )(),
+    )
+    monkeypatch.setattr(
+        "app.api.learning._serialize",
+        lambda session: LearningSessionResponse(
+            id=1,
+            task_id=task.id,
+            goal_id=1,
+            task_title="任务",
+            task_description="",
+            stage="explain",
+            covered_points=[],
+            weak_points=[],
+            ready_for_verification=False,
+            estimated_hours_snapshot=1.0,
+            turns=[],
+        ),
+    )
+
+    res = client.post(
+        f"/api/tasks/{task.id}/learning-session/turns/stream",
+        json={"client_turn_id": str(uuid4()), "message": "继续"},
+    )
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/event-stream")
+    assert "event: reply" in res.text
+    assert "你好" in res.text
+    assert "event: done" in res.text
+
+
+def test_stream_turn_rejects_unknown_model(client, db_session):
+    task = _task(db_session)
+    res = client.post(
+        f"/api/tasks/{task.id}/learning-session/turns/stream",
+        json={
+            "client_turn_id": str(uuid4()),
+            "message": "继续",
+            "model": "not-a-model",
+        },
+    )
+    assert res.status_code == 422

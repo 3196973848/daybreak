@@ -3,11 +3,13 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..database import get_db
+from ..config import settings
+from ..database import SessionLocal, get_db
 from ..llm.tutor import LearningStage
 from ..models import LearningSession, Task, User
 from ..services.learning_service import (
@@ -20,6 +22,7 @@ from ..services.learning_service import (
     get_learning_session,
     goal_id_for,
     start_learning_session,
+    stream_learning_turn_events,
 )
 
 
@@ -38,6 +41,7 @@ class LearningTurnCreate(BaseModel):
 
     client_turn_id: UUID
     message: str = Field(min_length=1, max_length=10000)
+    model: str | None = None
 
     @field_validator("message")
     @classmethod
@@ -128,6 +132,15 @@ def _owned_task(db: Session, task_id: int, user_id: int) -> Task:
     return task
 
 
+def _validate_model(model: str | None) -> None:
+    if model is not None and model not in settings.available_models:
+        raise HTTPException(status_code=422, detail="不支持的模型")
+
+
+def _error_event(message: str) -> str:
+    return f"event: error\ndata: {json.dumps({'message': message}, ensure_ascii=False)}\n\n"
+
+
 @router.get("/{task_id}/learning-session", response_model=LearningSessionResponse)
 def read_learning_session(
     task_id: int,
@@ -174,9 +187,10 @@ def create_learning_turn(
     user: User = Depends(get_current_user),
 ):
     _owned_task(db, task_id, user.id)
+    _validate_model(body.model)
     try:
         session, _ = add_learning_turn(
-            db, task_id, str(body.client_turn_id), body.message
+            db, task_id, str(body.client_turn_id), body.message, body.model
         )
         return _serialize(session)
     except (
@@ -187,3 +201,51 @@ def create_learning_turn(
         LearningPersistenceError,
     ) as error:
         _raise_public_error(error, operation="turn")
+
+
+@router.post("/{task_id}/learning-session/turns/stream")
+def stream_learning_turn(
+    task_id: int,
+    body: LearningTurnCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _owned_task(db, task_id, user.id)
+    _validate_model(body.model)
+
+    def generate():
+        with SessionLocal() as stream_db:
+            try:
+                for kind, payload in stream_learning_turn_events(
+                    stream_db,
+                    task_id,
+                    str(body.client_turn_id),
+                    body.message,
+                    body.model,
+                ):
+                    if kind == "reply":
+                        yield (
+                            "event: reply\n"
+                            f"data: {json.dumps({'text': payload}, ensure_ascii=False)}\n\n"
+                        )
+                    else:
+                        session, _ = payload
+                        yield (
+                            "event: done\n"
+                            f"data: {_serialize(session).model_dump_json()}\n\n"
+                        )
+                        return
+            except LearningTaskNotFound:
+                yield _error_event(TASK_NOT_FOUND)
+            except LearningTaskTypeError:
+                yield _error_event(TASK_TYPE_ERROR)
+            except LearningSessionNotFound:
+                yield _error_event(SESSION_NOT_FOUND)
+            except LearningGenerationError:
+                yield _error_event(GENERATION_ERROR)
+            except LearningPersistenceError:
+                yield _error_event(TURN_PERSISTENCE_ERROR)
+            except Exception:
+                yield _error_event(TURN_PERSISTENCE_ERROR)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import auth, goals, learning, tasks
+from .api import auth, goals, learning, settings, tasks
 from .database import init_db
 
 
@@ -20,6 +20,7 @@ app = FastAPI(title="PlanAgent", lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(goals.router)
 app.include_router(learning.router)
+app.include_router(settings.router)
 app.include_router(tasks.router)
 
 
