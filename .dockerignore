@@ -1,0 +1,12 @@
+.git
+.worktrees
+.superpowers
+docs
+.viz
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/dist
+**/*.db
+**/.pytest_cache
+**/.pytest_tmp

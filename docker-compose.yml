@@ -1,0 +1,15 @@
+services:
+  planagent:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - planagent-data:/data
+    environment:
+      PLANAGENT_AUTH_SECRET: ${PLANAGENT_AUTH_SECRET:?set a long random secret, e.g. openssl rand -hex 32}
+      PLANAGENT_LLM_API_KEY: ${PLANAGENT_LLM_API_KEY:-}
+      PLANAGENT_AUTH_COOKIE_SECURE: "true"
+    restart: unless-stopped
+
+volumes:
+  planagent-data:

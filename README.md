@@ -42,6 +42,24 @@ npm run dev   # http://localhost:5173 (已代理 /api 到 :8000)
 cd backend && python -m pytest
 ```
 
+## 部署（对外分享）
+
+构建并运行 Docker 镜像（需要一台服务器 / 域名）：
+
+```bash
+# 1. 准备环境变量
+export PLANAGENT_AUTH_SECRET=$(openssl rand -hex 32)   # 会话签名密钥，必须设置
+export PLANAGENT_LLM_API_KEY=sk-...                    # DeepSeek key
+
+# 2. 构建并启动
+docker compose up -d --build
+```
+
+- 应用监听 `8000`；前端静态文件由后端一并托管，`/` 与子路由都指向 SPA。
+- 数据保存在 Docker 卷 `planagent-data`（SQLite），升级容器不丢数据。
+- 对外公开请在前面加 HTTPS 反向代理（Caddy / Nginx），`PLANAGENT_AUTH_COOKIE_SECURE=true` 已在 compose 中设置。
+- 第一个注册的账号会自动接管升级前遗留的单用户数据。
+
 ## 结构
 - `backend/app/llm` — LLM 编排(计划生成、检验出题/判分)
 - `backend/app/scheduler` — 确定性排程算法
