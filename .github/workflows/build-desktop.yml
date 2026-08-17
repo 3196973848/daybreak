@@ -5,6 +5,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - duration-uniform-scheduling
 
 jobs:
   build:
