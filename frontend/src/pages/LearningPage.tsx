@@ -309,8 +309,14 @@ export function LearningPage() {
                     id="learning-reply"
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault()
+                        submit(event as unknown as FormEvent)
+                      }
+                    }}
                     disabled={loading || sending || pending !== null}
-                    placeholder="写下你的理解或问题…"
+                    placeholder="Enter 发送，Shift+Enter 换行"
                     rows={4}
                   />
                   {error && <p className="error-text" role="alert">{error}</p>}

@@ -275,6 +275,28 @@ describe('LearningPage', () => {
     expect(localStorage.getItem('planagent_model')).toBe('deepseek-chat')
   })
 
+  it('sends on Enter without inserting a newline', async () => {
+    const user = userEvent.setup()
+    const pending = deferred<void>()
+    mockedApi.streamTutorTurn.mockReturnValue(pending.promise)
+    renderPage()
+
+    const textarea = await screen.findByRole('textbox', { name: '回复导师' }) as HTMLTextAreaElement
+    await user.type(textarea, '直接发送{enter}')
+
+    expect(mockedApi.streamTutorTurn).toHaveBeenCalledTimes(1)
+    expect(mockedApi.streamTutorTurn).toHaveBeenCalledWith(
+      7,
+      {
+        client_turn_id: '11111111-1111-4111-8111-111111111111',
+        message: '直接发送',
+        model: 'deepseek-v4-pro',
+      },
+      expect.any(Object),
+    )
+    expect(textarea.value).toBe('直接发送')
+  })
+
   it.each([
     { ready: true, visible: true },
     { ready: false, visible: false },
