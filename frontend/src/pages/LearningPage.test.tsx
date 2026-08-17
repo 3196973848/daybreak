@@ -15,7 +15,8 @@ vi.mock('../api/client', async (importOriginal) => {
     api: {
       getLearningSession: vi.fn(),
       startLearningSession: vi.fn(),
-      sendLearningTurn: vi.fn(),
+      getModels: vi.fn(),
+      streamTutorTurn: vi.fn(),
       getVerification: vi.fn(),
       submitVerification: vi.fn(),
     },
@@ -83,6 +84,11 @@ afterEach(() => {
 describe('LearningPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.removeItem('planagent_model')
+    mockedApi.getModels.mockResolvedValue({
+      models: ['deepseek-v4-pro', 'deepseek-chat'],
+      default: 'deepseek-v4-pro',
+    })
     vi.stubGlobal('crypto', {
       randomUUID: vi.fn(() => '11111111-1111-4111-8111-111111111111'),
     })
@@ -162,8 +168,8 @@ describe('LearningPage', () => {
 
   it('creates one UUID and disables duplicate submission while the tutor is thinking', async () => {
     const user = userEvent.setup()
-    const send = deferred<LearningSessionDTO>()
-    mockedApi.sendLearningTurn.mockReturnValue(send.promise)
+    const pending = deferred<void>()
+    mockedApi.streamTutorTurn.mockReturnValue(pending.promise)
     renderPage()
 
     const textarea = await screen.findByRole('textbox', { name: '回复导师' }) as HTMLTextAreaElement
@@ -174,11 +180,16 @@ describe('LearningPage', () => {
     expect(textarea.disabled).toBe(true)
     expect((screen.getByRole('button', { name: '发送中' }) as HTMLButtonElement).disabled).toBe(true)
     await user.click(screen.getByRole('button', { name: '发送中' }))
-    expect(mockedApi.sendLearningTurn).toHaveBeenCalledTimes(1)
-    expect(mockedApi.sendLearningTurn).toHaveBeenCalledWith(7, {
-      client_turn_id: '11111111-1111-4111-8111-111111111111',
-      message: '它保存了定义位置的作用域。',
-    })
+    expect(mockedApi.streamTutorTurn).toHaveBeenCalledTimes(1)
+    expect(mockedApi.streamTutorTurn).toHaveBeenCalledWith(
+      7,
+      {
+        client_turn_id: '11111111-1111-4111-8111-111111111111',
+        message: '它保存了定义位置的作用域。',
+        model: 'deepseek-v4-pro',
+      },
+      expect.any(Object),
+    )
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
   })
 
@@ -198,9 +209,13 @@ describe('LearningPage', () => {
         },
       ],
     }
-    mockedApi.sendLearningTurn
-      .mockRejectedValueOnce(new Error('网络中断'))
-      .mockResolvedValueOnce(successfulSession)
+    mockedApi.streamTutorTurn
+      .mockImplementationOnce(async (_id, _body, handlers) => {
+        handlers.onError('网络中断')
+      })
+      .mockImplementationOnce(async (_id, _body, handlers) => {
+        handlers.onDone(successfulSession)
+      })
     renderPage()
 
     const textarea = await screen.findByRole('textbox', { name: '回复导师' }) as HTMLTextAreaElement
@@ -213,15 +228,51 @@ describe('LearningPage', () => {
     await user.click(screen.getByRole('button', { name: '重试' }))
 
     await screen.findByText('好，我们来看计数器闭包。')
-    const firstBody = mockedApi.sendLearningTurn.mock.calls[0][1]
-    const retryBody = mockedApi.sendLearningTurn.mock.calls[1][1]
+    const firstBody = mockedApi.streamTutorTurn.mock.calls[0][1]
+    const retryBody = mockedApi.streamTutorTurn.mock.calls[1][1]
     expect(retryBody).toEqual(firstBody)
     expect(retryBody).toEqual({
       client_turn_id: '11111111-1111-4111-8111-111111111111',
       message: '我想用一个例子继续。',
+      model: 'deepseek-v4-pro',
     })
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
     expect(textarea.value).toBe('')
+  })
+
+  it('shows streamed reply text while the turn is being generated', async () => {
+    const user = userEvent.setup()
+    const pending = deferred<void>()
+    let doneHandler: (session: LearningSessionDTO) => void = () => undefined
+    mockedApi.streamTutorTurn.mockImplementationOnce(async (_id, _body, handlers) => {
+      handlers.onReply('你好')
+      handlers.onReply('，世界')
+      doneHandler = handlers.onDone
+      await pending.promise
+    })
+    renderPage()
+
+    const textarea = await screen.findByRole('textbox', { name: '回复导师' }) as HTMLTextAreaElement
+    await user.type(textarea, '继续讲讲。')
+    await user.click(screen.getByRole('button', { name: '发送' }))
+
+    expect(await screen.findByText('你好，世界')).toBeTruthy()
+    await act(async () => {
+      doneHandler(existingSession)
+      pending.resolve()
+      await pending.promise
+    })
+    expect((screen.getByRole('textbox', { name: '回复导师' }) as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('persists the selected model', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const select = await screen.findByLabelText('模型') as HTMLSelectElement
+    expect(select.value).toBe('deepseek-v4-pro')
+    await user.selectOptions(select, 'deepseek-chat')
+    expect(localStorage.getItem('planagent_model')).toBe('deepseek-chat')
   })
 
   it.each([

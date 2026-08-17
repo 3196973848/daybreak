@@ -1050,6 +1050,23 @@ textarea.input { resize: vertical; min-height: 72px; }
   padding: 18px;
 }
 
+.learning-model-field { margin-bottom: 16px; }
+
+.learning-stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: var(--text);
+  vertical-align: text-bottom;
+  animation: learning-cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes learning-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .learning-status-card h2,
 .learning-chat h2 { margin: 0; font-size: 17px; }
 

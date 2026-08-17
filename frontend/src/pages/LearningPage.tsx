@@ -59,7 +59,25 @@ export function LearningPage() {
   const [pending, setPending] = useState<PendingSubmission | null>(null)
   const [verificationTask, setVerificationTask] = useState<TaskDTO | null>(null)
   const [verificationPassed, setVerificationPassed] = useState(false)
+  const [models, setModels] = useState<string[]>([])
+  const [selectedModel, setSelectedModel] = useState('')
+  const [streamingText, setStreamingText] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    api.getModels()
+      .then((info) => {
+        if (!active) return
+        setModels(info.models)
+        const saved = localStorage.getItem('planagent_model')
+        setSelectedModel(saved && info.models.includes(saved) ? saved : info.default)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -72,6 +90,7 @@ export function LearningPage() {
     setPending(null)
     setVerificationTask(null)
     setVerificationPassed(false)
+    setStreamingText('')
     setError('')
 
     async function load() {
@@ -117,17 +136,32 @@ export function LearningPage() {
     const version = routeVersion.current
     setPending(body)
     setSending(true)
+    setStreamingText('')
     setError('')
     try {
-      const updated = await api.sendLearningTurn(numericTaskId, body)
-      if (routeVersion.current !== version) return
-      setSession(updated)
-      setDraft('')
-      setPending(null)
-    } catch (sendError) {
-      if (routeVersion.current === version) {
-        setError(messageFrom(sendError, '发送失败'))
-      }
+      await api.streamTutorTurn(
+        numericTaskId,
+        {
+          client_turn_id: body.client_turn_id,
+          message: body.message,
+          model: selectedModel || undefined,
+        },
+        {
+          onReply: (text) => {
+            if (routeVersion.current === version) setStreamingText((prev) => prev + text)
+          },
+          onDone: (updated) => {
+            if (routeVersion.current !== version) return
+            setSession(updated)
+            setDraft('')
+            setPending(null)
+            setStreamingText('')
+          },
+          onError: (message) => {
+            if (routeVersion.current === version) setError(message)
+          },
+        },
+      )
     } finally {
       if (routeVersion.current === version) setSending(false)
     }
@@ -195,6 +229,23 @@ export function LearningPage() {
 
             <div className="learning-layout">
               <aside className="card learning-status-card" aria-label="学习状态">
+                {models.length > 0 && (
+                  <div className="field learning-model-field">
+                    <label className="field-label" htmlFor="tutor-model">模型</label>
+                    <select
+                      id="tutor-model"
+                      className="input"
+                      value={selectedModel}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setSelectedModel(value)
+                        localStorage.setItem('planagent_model', value)
+                      }}
+                    >
+                      {models.map((model) => <option key={model} value={model}>{model}</option>)}
+                    </select>
+                  </div>
+                )}
                 <h2>学习状态</h2>
                 <dl className="learning-status-summary">
                   <div>
@@ -244,6 +295,12 @@ export function LearningPage() {
                       </div>
                     </article>
                   ))}
+                  {streamingText !== '' && (
+                    <div className="learning-message learning-assistant-message">
+                      <span className="learning-message-label">导师</span>
+                      <p>{streamingText}<span className="learning-stream-cursor" /></p>
+                    </div>
+                  )}
                 </div>
 
                 <form className="learning-composer" onSubmit={submit}>

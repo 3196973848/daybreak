@@ -46,6 +46,11 @@ export interface UserDTO {
   auth_enabled?: boolean
 }
 
+export interface ModelsDTO {
+  models: string[]
+  default: string
+}
+
 export interface TestQuestionDTO {
   id: number
   type: 'choice' | 'short'
