@@ -997,6 +997,35 @@ textarea.input { resize: vertical; min-height: 72px; }
   text-decoration: underline;
 }
 
+.setup-providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.setup-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  color: var(--text-dim);
+  text-align: left;
+  transition: border-color var(--transition), color var(--transition);
+}
+
+.setup-provider.on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.setup-provider span {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 /* ---------- 导师学习页 ---------- */
 .learning-page { max-width: 1120px; }
 
@@ -1193,6 +1222,7 @@ textarea.input { resize: vertical; min-height: 72px; }
 @media (max-width: 700px) {
   .auth-window { grid-template-columns: 1fr; }
   .auth-right { border-left: 0; border-top: 1px solid var(--hairline); }
+  .setup-providers { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {

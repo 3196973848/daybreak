@@ -51,6 +51,29 @@ export interface ModelsDTO {
   default: string
 }
 
+export interface ProviderDTO {
+  id: string
+  name: string
+  requires_key: boolean
+  models: string[]
+}
+
+export interface SettingsDTO {
+  configured: boolean
+  provider: string
+  providers: ProviderDTO[]
+  model: string
+  models: string[]
+  requires_key: boolean
+}
+
+export interface SettingsUpdate {
+  provider: string
+  api_key?: string
+  base_url?: string
+  model?: string
+}
+
 export interface TestQuestionDTO {
   id: number
   type: 'choice' | 'short'

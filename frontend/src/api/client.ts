@@ -1,6 +1,7 @@
 import type {
   GoalDTO, LearningSessionDTO, ModelsDTO, TaskDTO, UserDTO,
-  VerificationResult, VerificationStart, VerificationSubmit,
+  SettingsDTO, SettingsUpdate, VerificationResult, VerificationStart,
+  VerificationSubmit,
 } from '../types'
 
 const BASE = '/api'
@@ -46,6 +47,9 @@ export interface CreateGoalInput {
 
 export const api = {
   getModels: () => req<ModelsDTO>('/settings/models'),
+  getSettings: () => req<SettingsDTO>('/settings'),
+  saveSettings: (body: SettingsUpdate) =>
+    req<SettingsDTO>('/settings', { method: 'POST', body: JSON.stringify(body) }),
   register: (username: string, password: string) =>
     req<UserDTO>('/auth/register', {
       method: 'POST',

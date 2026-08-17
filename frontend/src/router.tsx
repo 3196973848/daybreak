@@ -2,10 +2,12 @@ import type { ReactNode } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 
 import { useAuth } from './auth/AuthContext'
+import { SetupGate } from './auth/SetupGate'
 import { DailyTasks } from './pages/DailyTasks'
 import { GoalInput } from './pages/GoalInput'
 import { LearningPage } from './pages/LearningPage'
 import { PlanOverview } from './pages/PlanOverview'
+import { SetupPage } from './pages/SetupPage'
 
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -19,8 +21,29 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 
 export const router = createBrowserRouter([
-  { path: '/', element: <RequireAuth><GoalInput /></RequireAuth> },
-  { path: '/goals/:id', element: <RequireAuth><PlanOverview /></RequireAuth> },
-  { path: '/goals/:id/daily', element: <RequireAuth><DailyTasks /></RequireAuth> },
-  { path: '/tasks/:taskId/learn', element: <RequireAuth><LearningPage /></RequireAuth> },
+  { path: '/setup', element: <SetupGate><SetupPage /></SetupGate> },
+  {
+    path: '/',
+    element: (
+      <SetupGate><RequireAuth><GoalInput /></RequireAuth></SetupGate>
+    ),
+  },
+  {
+    path: '/goals/:id',
+    element: (
+      <SetupGate><RequireAuth><PlanOverview /></RequireAuth></SetupGate>
+    ),
+  },
+  {
+    path: '/goals/:id/daily',
+    element: (
+      <SetupGate><RequireAuth><DailyTasks /></RequireAuth></SetupGate>
+    ),
+  },
+  {
+    path: '/tasks/:taskId/learn',
+    element: (
+      <SetupGate><RequireAuth><LearningPage /></RequireAuth></SetupGate>
+    ),
+  },
 ])
