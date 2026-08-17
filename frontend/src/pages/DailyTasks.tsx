@@ -9,9 +9,15 @@ import { IconCheck, IconClipboard } from '../components/icons'
 import { todayLocal } from '../utils/date'
 
 const TYPE_TEXT: Record<string, string> = { learn: '学习', practice: '实操', project: '项目' }
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 function toKey(iso: string | null): string {
   return iso ? iso.slice(0, 10) : '未排期'
+}
+
+function weekdayOf(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? '' : WEEKDAYS[d.getDay()]
 }
 
 export function DailyTasks() {
@@ -70,34 +76,45 @@ export function DailyTasks() {
     <>
       <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
       <div className="page">
-        <h1 style={{ fontSize: 22, margin: '0 0 4px' }}>{goal.title}</h1>
-        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
+        <header className="page-head">
+          <div>
+            <p className="eyebrow">每日任务</p>
+            <h1 className="page-title">{goal.title}</h1>
+          </div>
+        </header>
+        {error && <p className="error-text" style={{ marginBottom: 12 }}>{error}</p>}
 
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginTop: 16, flexWrap: 'wrap' }}>
-          <div className="card" style={{ padding: 16, flex: 1, minWidth: 300 }}>
-            <div style={{ textAlign: 'center', marginBottom: 12 }}>
-              <div style={{ fontWeight: 600 }}>{selected}</div>
-              <div className="faint" style={{ fontSize: 12 }}>点击任务左侧圆点可勾选完成</div>
+        <div className="daily-layout">
+          <div className="card daily-list">
+            <div className="daily-list-head">
+              <div className="daily-date">{selected} · 周{weekdayOf(selected)}</div>
+              <div className="daily-hint">点击任务左侧圆点，标记完成</div>
             </div>
-            {dayTasks.length === 0 && <p className="faint" style={{ textAlign: 'center' }}>这一天没有任务</p>}
+
+            {dayTasks.length === 0 && (
+              <div className="empty">这一天没有安排任务，换个日期看看</div>
+            )}
+
             {dayTasks.map((t) => (
-              <div key={t.id} className="card row-hover" style={{ padding: '10px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div key={t.id} className="card row-hover task-card">
                 <button
+                  type="button"
                   className={`circle-dot ${t.status === 'done' ? 'done' : ''}`}
                   onClick={() => void toggle(t)}
                   aria-label={t.status === 'done' ? '标记未完成' : '标记完成'}
                 >
                   {t.status === 'done' && <IconCheck size={13} />}
                 </button>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
-                    {t.title}
-                  </div>
-                  <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
-                    {TYPE_TEXT[t.type] ?? t.type} · 约 {t.effort} 小时
-                    {t.verified ? ' · 已验证' : ''}
+
+                <div className="task-main">
+                  <div className={`task-name ${t.status === 'done' ? 'done' : ''}`}>{t.title}</div>
+                  <div className="task-meta">
+                    <span className="task-type">{TYPE_TEXT[t.type] ?? t.type}</span>
+                    <span>约 {t.effort} 小时</span>
+                    {t.verified && <span className="verified">已验证</span>}
                   </div>
                 </div>
+
                 <button className="btn-ghost" onClick={() => setVerifyTask(t)}>
                   <IconClipboard size={14} />
                   检验

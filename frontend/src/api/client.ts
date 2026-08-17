@@ -1,5 +1,6 @@
 import type {
-  GoalDTO, TaskDTO, VerificationResult, VerificationStart, VerificationSubmit,
+  GoalDTO, LearningSessionDTO, TaskDTO, VerificationResult, VerificationStart,
+  VerificationSubmit,
 } from '../types'
 
 const BASE = '/api'
@@ -57,5 +58,13 @@ export const api = {
     req<VerificationResult>(`/tasks/${taskId}/verification`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  getLearningSession: (taskId: number) =>
+    req<LearningSessionDTO>(`/tasks/${taskId}/learning-session`),
+  startLearningSession: (taskId: number) =>
+    req<LearningSessionDTO>(`/tasks/${taskId}/learning-session`, { method: 'POST' }),
+  sendLearningTurn: (taskId: number, body: { client_turn_id: string; message: string }) =>
+    req<LearningSessionDTO>(`/tasks/${taskId}/learning-session/turns`, {
+      method: 'POST', body: JSON.stringify(body),
     }),
 }

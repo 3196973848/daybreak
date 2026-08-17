@@ -14,7 +14,10 @@ export function Calendar({
   const first = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const todayIso = todayLocal()
-  const cells: Array<number | null> = [...Array(first).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  const cells: Array<number | null> = [
+    ...Array(first).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
 
   function onMonthChange(delta: number) {
     const d = new Date(year, month + delta, 1)
@@ -22,41 +25,45 @@ export function Calendar({
   }
 
   return (
-    <div className="card" style={{ padding: 16, width: 250 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <button className="btn-ghost" onClick={() => onMonthChange(-1)}>‹</button>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{year}年{month + 1}月</span>
-        <button className="btn-ghost" onClick={() => onMonthChange(1)}>›</button>
+    <div className="card calendar">
+      <div className="calendar-head">
+        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(-1)} aria-label="上个月">
+          ‹
+        </button>
+        <span className="calendar-month">{year}年{month + 1}月</span>
+        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(1)} aria-label="下个月">
+          ›
+        </button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
-        {WEEK.map((w) => <span key={w} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-faint)' }}>{w}</span>)}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+
+      <div className="calendar-grid">
+        {WEEK.map((w) => (
+          <span key={w} className="calendar-weekday">{w}</span>
+        ))}
         {cells.map((day, i) => {
-          if (day === null) return <div key={`b${i}`} />
+          if (day === null) return <span key={`blank-${i}`} />
+
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-          const isSel = iso === selected
+          const isSelected = iso === selected
           const isToday = iso === todayIso
           const hasTasks = datesWithTasks.has(iso)
+          const className = [
+            'calendar-cell',
+            isSelected ? 'selected' : '',
+            isToday ? 'today' : '',
+            hasTasks ? 'has-tasks' : '',
+          ].filter(Boolean).join(' ')
+
           return (
-            <div
-              key={iso}
-              onClick={() => onSelect(iso)}
-              style={{
-                width: 28, height: 28, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', fontSize: 12, borderRadius: 6, cursor: 'pointer',
-                background: isSel ? 'var(--accent)' : undefined,
-                color: isSel ? '#000' : hasTasks ? 'var(--text)' : 'var(--text-faint)',
-                border: isToday ? '1px solid var(--text-faint)' : undefined,
-              }}
-            >
+            <button type="button" key={iso} className={className} onClick={() => onSelect(iso)}>
               {day}
-              {hasTasks && !isSel && <span style={{ width: 4, height: 4, background: 'var(--accent)', borderRadius: 2 }} />}
-            </div>
+              {hasTasks && !isSelected && <span className="calendar-dot" />}
+            </button>
           )
         })}
       </div>
-      <p className="faint" style={{ fontSize: 11, marginTop: 10 }}>• = 当天有任务</p>
+
+      <p className="calendar-legend">• 当天有任务</p>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import type { DurationUnit } from '../api/client'
 import type { GoalDTO } from '../types'
 import { GoalList } from '../components/GoalList'
 import { TopBar } from '../components/TopBar'
+import { todayLocal } from '../utils/date'
 
 interface InsufficientCapacityDetail {
   code: 'insufficient_capacity'
@@ -28,6 +29,7 @@ function isInsufficientCapacityDetail(detail: unknown): detail is InsufficientCa
 
 export function GoalInput() {
   const navigate = useNavigate()
+  const today = todayLocal()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [durationValue, setDurationValue] = useState('30')
@@ -90,92 +92,106 @@ export function GoalInput() {
     <>
       <TopBar />
       <div className="page page-narrow">
-        <p className="dim" style={{ marginTop: 8 }}>
-          输入一个目标，AI 会把它拆解成里程碑和每日任务。
-        </p>
+        <header className="hero">
+          <div className="date-hero">
+            {`${today.slice(0, 4)} / ${today.slice(5, 7)} / ${today.slice(8, 10)}`}
+            <span> · 今天</span>
+          </div>
+          <p className="eyebrow">目标 → 每日日程</p>
+          <h1 className="hero-title" style={{ marginTop: 10 }}>把一个目标，变成每天的日程</h1>
+          <p className="hero-sub">AI 会把它拆成里程碑和每日任务，并排出可以执行的日期。</p>
+        </header>
 
-        <form className="card" style={{ padding: 24, marginTop: 20 }} onSubmit={onSubmit} noValidate>
-          <label htmlFor="goal-title" className="dim" style={{ fontSize: 13 }}>目标标题 *</label>
-          <input
-            id="goal-title"
-            className="input" style={{ marginTop: 6 }}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="例如：3个月从零学会Python编程"
-            autoFocus
-          />
-          <label className="dim" style={{ fontSize: 13, display: 'block', marginTop: 16 }}>补充说明(可选)</label>
-          <textarea
-            className="input" style={{ marginTop: 6, minHeight: 64 }}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="想达到什么程度？有什么约束？"
-          />
-          <label htmlFor="duration-value" className="dim" style={{ fontSize: 13, display: 'block', marginTop: 16 }}>
-            预期完成时间
-          </label>
-          <div className="duration-row" style={{ marginTop: 6 }}>
+        <form className="card form-card" onSubmit={onSubmit} noValidate>
+          <div className="field">
+            <label htmlFor="goal-title" className="field-label">目标标题 *</label>
             <input
-              id="duration-value"
+              id="goal-title"
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例如：3个月从零学会Python编程"
+              autoFocus
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="goal-desc" className="field-label">补充说明（可选）</label>
+            <textarea
+              id="goal-desc"
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="想达到什么程度？有什么约束？"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="duration-value" className="field-label">预期完成时间</label>
+            <div className="duration-row">
+              <input
+                id="duration-value"
+                type="number"
+                className="input"
+                min={1}
+                step={1}
+                required
+                value={durationValue}
+                aria-invalid={durationError ? true : undefined}
+                aria-describedby={durationError ? 'duration-error' : undefined}
+                onChange={(e) => {
+                  setDurationValue(e.target.value)
+                  setDurationError('')
+                }}
+              />
+              <label className="sr-only" htmlFor="duration-unit">时间单位</label>
+              <select
+                id="duration-unit"
+                className="input"
+                value={durationUnit}
+                onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
+              >
+                <option value="day">天</option>
+                <option value="week">周</option>
+                <option value="month">月</option>
+              </select>
+            </div>
+            <p className="field-help">任务会从今天起（包含周末）均匀安排在这段时间内。</p>
+            {durationError && (
+              <p id="duration-error" role="alert" className="error-text">
+                {durationError}
+              </p>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="daily-hours" className="field-label">每日可投入时间</label>
+            <input
+              id="daily-hours"
               type="number"
               className="input"
-              min={1}
-              step={1}
+              min={0.5}
+              step={0.5}
               required
-              value={durationValue}
-              aria-invalid={durationError ? true : undefined}
-              aria-describedby={durationError ? 'duration-error' : undefined}
+              value={dailyHours}
+              aria-invalid={dailyHoursError ? true : undefined}
+              aria-describedby={dailyHoursError ? 'daily-hours-error' : undefined}
               onChange={(e) => {
-                setDurationValue(e.target.value)
-                setDurationError('')
+                setDailyHours(e.target.value)
+                setDailyHoursError('')
               }}
             />
-            <label className="sr-only" htmlFor="duration-unit">时间单位</label>
-            <select
-              id="duration-unit"
-              className="input"
-              value={durationUnit}
-              onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
-            >
-              <option value="day">天</option>
-              <option value="week">周</option>
-              <option value="month">月</option>
-            </select>
+            <p className="field-help">单位：小时，支持 0.5 的倍数。</p>
+            {dailyHoursError && (
+              <p id="daily-hours-error" role="alert" className="error-text">
+                {dailyHoursError}
+              </p>
+            )}
           </div>
-          <p className="faint" style={{ fontSize: 12, margin: '6px 0 0' }}>
-            任务会从今天起（包含周末）均匀安排在这段时间内。
-          </p>
-          {durationError && (
-            <p id="duration-error" role="alert" className="error-text" style={{ marginTop: 12 }}>
-              {durationError}
-            </p>
-          )}
-          <label htmlFor="daily-hours" className="dim" style={{ fontSize: 13, display: 'block', marginTop: 16 }}>
-            每日可投入时间
-          </label>
-          <input
-            id="daily-hours"
-            type="number"
-            className="input"
-            min={0.5}
-            step={0.5}
-            required
-            value={dailyHours}
-            aria-invalid={dailyHoursError ? true : undefined}
-            aria-describedby={dailyHoursError ? 'daily-hours-error' : undefined}
-            onChange={(e) => {
-              setDailyHours(e.target.value)
-              setDailyHoursError('')
-            }}
-            style={{ marginTop: 6 }}
-          />
-          {dailyHoursError && (
-            <p id="daily-hours-error" role="alert" className="error-text" style={{ marginTop: 12 }}>
-              {dailyHoursError}
-            </p>
-          )}
-          {error && <p role="alert" className="error-text" style={{ marginTop: 12 }}>{error}</p>}
-          <button className="btn" disabled={loading} style={{ marginTop: 20, width: '100%' }}>
+
+          {error && <p role="alert" className="error-text">{error}</p>}
+
+          <button className="btn btn-block" disabled={loading}>
             {loading ? 'AI 正在拆解计划…' : '生成计划'}
           </button>
         </form>

@@ -78,3 +78,28 @@ export interface VerificationResult {
   points?: number
   details?: QuizQuestionResultDTO[]
 }
+
+export type LearningStage = 'diagnose' | 'explain' | 'practice' | 'remediate' | 'ready'
+
+export interface LearningTurnDTO {
+  id: number
+  client_turn_id: string
+  user_message: string | null
+  assistant_message: string
+  stage: LearningStage
+  created_at: string
+}
+
+export interface LearningSessionDTO {
+  id: number
+  task_id: number
+  goal_id: number
+  task_title: string
+  task_description: string
+  stage: LearningStage
+  covered_points: string[]
+  weak_points: string[]
+  ready_for_verification: boolean
+  estimated_hours_snapshot: number
+  turns: LearningTurnDTO[]
+}

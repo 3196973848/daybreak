@@ -29,7 +29,7 @@ export function PlanOverview() {
       <>
         <TopBar title={goal.title} backTo="/" />
         <div className="page page-narrow">
-          <p className="error-text">此目标未生成计划(可能生成失败)。请返回删除后重试。</p>
+          <p className="error-text">此目标未生成计划（可能生成失败），请返回删除后重试。</p>
         </div>
       </>
     )
@@ -42,20 +42,23 @@ export function PlanOverview() {
     <>
       <TopBar title={goal.title} backTo="/" />
       <div className="page">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h1 style={{ fontSize: 22, margin: 0 }}>{goal.title}</h1>
+        <header className="page-head">
+          <div>
+            <p className="eyebrow">计划总览</p>
+            <h1 className="page-title">{goal.title}</h1>
+          </div>
           <Link to={`/goals/${goal.id}/daily`} className="btn-ghost">
             <IconCalendar size={14} />
             每日任务
           </Link>
-        </div>
+        </header>
 
         <div className="card" style={{ padding: 18 }}>
           <ProgressBar done={done} total={tasks.length} />
-          <p className="dim" style={{ fontSize: 13, margin: '10px 0 0' }}>策略：{goal.plan.strategy}</p>
+          <p className="dim" style={{ fontSize: 13, marginTop: 14 }}>策略：{goal.plan.strategy}</p>
         </div>
 
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 22 }}>
           {goal.plan.milestones.map((m) => <MilestoneCard key={m.id} m={m} />)}
         </div>
       </div>
@@ -66,42 +69,50 @@ export function PlanOverview() {
 function MilestoneCard({ m }: { m: MilestoneDTO }) {
   const [open, setOpen] = useState(false)
   const done = m.tasks.filter((t) => t.status === 'done').length
+  const statusClass = m.status === 'done' ? 'done' : m.status === 'active' ? 'active' : ''
+
   return (
-    <div className="card row-hover" style={{ padding: 14, marginBottom: 10 }}>
-      <div
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+    <div className="card row-hover milestone">
+      <button
+        type="button"
+        className="milestone-head"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
       >
-        <div>
-          <span style={{ fontWeight: 600 }}>里程碑 {m.order} · {m.title}</span>
-          <p className="faint" style={{ fontSize: 12, margin: '4px 0 0' }}>
-            {m.description} · {done}/{m.tasks.length} 完成
-          </p>
+        <span className="milestone-index">{String(m.order).padStart(2, '0')}</span>
+        <div className="milestone-main">
+          <div className="milestone-title">{m.title}</div>
+          <div className="milestone-meta">
+            <span className={`badge ${statusClass}`}>
+              <span className="badge-dot" />
+              {STATUS_TEXT[m.status] ?? m.status}
+            </span>
+            {m.due_date && <span className="mono">截止 {m.due_date}</span>}
+            <span>{done}/{m.tasks.length} 完成</span>
+          </div>
+          {m.description && <p className="milestone-desc">{m.description}</p>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="btn-ghost" style={{ borderRadius: 10, fontSize: 12, pointerEvents: 'none' }}>
-            {STATUS_TEXT[m.status] ?? m.status}
-          </span>
-          <span className="dim" style={{ display: 'inline-flex', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease' }}>
-            <IconChevronDown size={14} />
-          </span>
-        </div>
-      </div>
+        <span className={`chevron ${open ? 'open' : ''}`}>
+          <IconChevronDown size={15} />
+        </span>
+      </button>
+
       <div className={`collapse ${open ? 'open' : ''}`}>
         <div>
-          <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+          <div className="task-list">
             {m.tasks.map((t) => (
-              <div key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', fontSize: 13 }}>
-                <span style={{ color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
-                  {t.status === 'done' ? '☑' : '☐'}
+              <div key={t.id} className="task-line">
+                <span className={`task-check ${t.status === 'done' ? 'done' : ''}`}>
+                  {t.status === 'done' ? '✓' : '○'}
                 </span>
-                <span style={{ textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
-                  {t.title}
-                </span>
-                <span className="faint">{t.scheduled_date ?? ''}</span>
-                {t.verified && <span className="btn-ghost" style={{ borderRadius: 10, fontSize: 11, padding: '1px 8px' }}>已验证</span>}
+                <span className={`task-title ${t.status === 'done' ? 'done' : ''}`}>{t.title}</span>
+                {t.verified && <span className="verified">已验证</span>}
+                <span className="task-date">{t.scheduled_date ?? ''}</span>
               </div>
             ))}
+            {m.tasks.length === 0 && (
+              <p className="faint" style={{ padding: '7px 0', fontSize: 12 }}>此阶段暂无任务</p>
+            )}
           </div>
         </div>
       </div>

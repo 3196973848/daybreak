@@ -8,7 +8,9 @@ export function TopBar({
   return (
     <nav className="topbar">
       <Link to="/" className="topbar-brand">
-        <IconTarget size={18} />
+        <span className="brand-mark">
+          <IconTarget size={16} />
+        </span>
         <span>PlanAgent</span>
       </Link>
       {title && <span className="topbar-title">{title}</span>}

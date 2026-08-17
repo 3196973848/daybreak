@@ -81,26 +81,30 @@ export function VerificationModal({
   const generationMessage = `${generationLabel}…`
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
-      <div className="card" style={{ padding: 20, width: 460, maxHeight: '80vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <strong>检验 · {task.title}</strong>
-          <button className="btn-ghost btn-icon" onClick={onClose} aria-label="关闭"><IconX size={14} /></button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-title">检验 · {task.title}</div>
+            <p className="modal-sub">
+              {mode === 'test' ? '测试模式 · 答对 70% 即通过' : '交付模式 · 提交成果描述，评审是否达标'}
+            </p>
+          </div>
+          <button className="btn-ghost btn-icon" onClick={onClose} aria-label="关闭">
+            <IconX size={14} />
+          </button>
         </div>
-        <p className="faint" style={{ fontSize: 12, margin: '6px 0 14px' }}>
-          {mode === 'test' ? '测试模式 · 答对 70% 即通过' : '交付模式 · 提交成果描述，评审是否达标'}
-        </p>
 
-        {error && <p className="error-text" role="alert">{error}</p>}
+        {error && <p className="error-text" role="alert" style={{ marginBottom: 12 }}>{error}</p>}
 
         {result ? (
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            <div className={`result-title ${result.passed ? 'result-pass' : 'result-fail'}`}>
               {result.passed ? '✓ 检验通过' : '✗ 未通过'}
             </div>
             {mode === 'test' && result.points !== undefined ? (
               <>
-                <div className="dim verification-total">总分：{result.points} / 100</div>
+                <div className="verification-total">总分：{result.points} / 100</div>
                 {result.details && (
                   <ol className="verification-details">
                     {result.details.map((detail) => (
@@ -123,10 +127,10 @@ export function VerificationModal({
                 )}
               </>
             ) : (
-              <div className="dim" style={{ fontSize: 13, marginBottom: 8 }}>得分：{Math.round(result.score * 100)}%</div>
+              <div className="score">得分：{Math.round(result.score * 100)}%</div>
             )}
-            <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{result.feedback}</p>
-            <button className="btn" style={{ marginTop: 16 }} onClick={onClose}>关闭</button>
+            <p className="feedback">{result.feedback}</p>
+            <button className="btn btn-block" style={{ marginTop: 18 }} onClick={onClose}>关闭</button>
           </div>
         ) : generating ? (
           <div className="verification-loading">
@@ -139,7 +143,7 @@ export function VerificationModal({
             ><span /></div>
           </div>
         ) : content === null ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <div className="modal-actions">
             <button className="btn-ghost" onClick={onClose}>取消</button>
             <button className="btn" onClick={() => setGenerationAttempt((attempt) => attempt + 1)}>
               重新生成
@@ -148,41 +152,46 @@ export function VerificationModal({
         ) : (
           <>
             {testContent && testContent.questions.map((q) => (
-              <div key={q.id} style={{ marginBottom: 14 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>{q.text}</p>
+              <div key={q.id} className="question">
+                <p className="question-text">{q.text}</p>
                 {q.type === 'choice' ? (
                   q.options.map((opt) => (
-                    <label key={opt} style={{ display: 'block', fontSize: 13, padding: '2px 0', cursor: 'pointer' }}>
+                    <label key={opt} className="option">
                       <input
                         type="radio"
                         name={`q${q.id}`}
                         checked={answers[q.id] === opt}
                         onChange={() => setAnswers({ ...answers, [q.id]: opt })}
-                      /> {opt}
+                      />
+                      {opt}
                     </label>
                   ))
                 ) : (
                   <textarea
-                    className="input" style={{ minHeight: 56 }}
+                    className="input"
                     value={answers[q.id] ?? ''}
                     onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                    placeholder="写下你的回答…"
                   />
                 )}
               </div>
             ))}
+
             {deliverContent && (
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>验收标准</p>
-                <p className="dim" style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{deliverContent.acceptance_criteria}</p>
+              <div className="question">
+                <p className="question-text">验收标准</p>
+                <p className="feedback">{deliverContent.acceptance_criteria}</p>
                 <textarea
-                  className="input" style={{ minHeight: 80, marginTop: 10 }}
+                  className="input"
+                  style={{ marginTop: 10 }}
                   placeholder="填写你的实现成果 / 代码链接 / 说明……"
                   value={submission}
                   onChange={(e) => setSubmission(e.target.value)}
                 />
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+
+            <div className="modal-actions">
               <button className="btn-ghost" onClick={onClose}>取消</button>
               <button className="btn" disabled={submitting} onClick={() => void submit()}>
                 {submitting ? 'AI 评审中…' : mode === 'test' ? '提交检验' : '提交评审'}
