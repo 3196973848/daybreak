@@ -15,6 +15,7 @@ Turn a vague goal into a concrete daily plan. PlanAgent uses an LLM to break you
 - **Goal → plan**: an LLM decomposes any goal into milestones and daily tasks.
 - **Duration-based scheduling**: pick a day/week/month deadline; tasks are spread evenly across the period, including weekends. If capacity is insufficient, the app tells you the shortest feasible duration.
 - **Daily execution**: calendar view, one-click task completion, effort and type labels.
+- **Calendar export**: download any plan as an iCal file and import it into your calendar app.
 - **Verification**: learning tasks get a fresh 10-question quiz (70/100 to pass); practice/project tasks go through a delivery review. History is stored.
 - **Task-scoped AI tutor**: persistent adaptive conversation (diagnose → explain → practice → remediate → ready), streaming replies, and switchable models.
 - **Local-first**: single-user mode by default, no sign-in required; data lives in a local `planagent.db`.
@@ -118,7 +119,8 @@ Push a `v*` tag (e.g. `v1.0.0`) and GitHub Actions builds Windows and macOS pack
 - [ ] First-run setup wizard for API keys
 - [ ] OpenAI, Claude, and local (Ollama) providers
 - [ ] English UI
-- [ ] Calendar import/export (iCal)
+- [x] Calendar export (iCal)
+- [ ] Calendar import
 - [ ] Reminders
 - [ ] Adaptive replanning when you fall behind
 - [ ] Plan templates / community presets

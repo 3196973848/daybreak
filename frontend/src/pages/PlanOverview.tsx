@@ -8,6 +8,20 @@ import { IconCalendar, IconChevronDown } from '../components/icons'
 
 const STATUS_TEXT: Record<string, string> = { todo: '未开始', active: '进行中', done: '已完成' }
 
+async function downloadCalendar(goalId: number) {
+  const res = await fetch(`/api/goals/${goalId}/calendar.ics`)
+  if (!res.ok) return
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `planagent-${goalId}.ics`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function allTasks(plan?: GoalDTO['plan']): Array<{ status: string }> {
   return plan ? plan.milestones.flatMap((m) => m.tasks) : []
 }
@@ -47,10 +61,16 @@ export function PlanOverview() {
             <p className="eyebrow">计划总览</p>
             <h1 className="page-title">{goal.title}</h1>
           </div>
-          <Link to={`/goals/${goal.id}/daily`} className="btn-ghost">
-            <IconCalendar size={14} />
-            每日任务
-          </Link>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" onClick={() => void downloadCalendar(goal.id)}>
+              <IconCalendar size={14} />
+              导出日历
+            </button>
+            <Link to={`/goals/${goal.id}/daily`} className="btn-ghost">
+              <IconCalendar size={14} />
+              每日任务
+            </Link>
+          </div>
         </header>
 
         <div className="card" style={{ padding: 18 }}>
