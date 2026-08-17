@@ -28,10 +28,4 @@ The README showcases a short demo recording (`docs/screenshots/demo.gif`). To cr
 
 1. Run the app locally, then record 15–30 seconds covering the main flow: home → create a goal → plan overview → daily tasks → tutor chat.
 2. On Windows use `Win + Alt + R` (Xbox Game Bar); save the recording as `docs/screenshots/demo.mp4`.
-3. Convert it with:
-
-```bash
-python scripts/make_demo_gif.py docs/screenshots/demo.mp4 docs/screenshots/demo.gif
-```
-
-The script resizes to 900px wide, ~12 fps, and caps the frame count to keep the GIF small.
+3. Send the recording to the maintainer, who will convert it to `docs/screenshots/demo.gif` (resized to 900px wide, ~12 fps).
