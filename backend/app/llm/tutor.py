@@ -1,10 +1,10 @@
 import json
 from typing import Iterator, Literal
 
-from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..config import settings
+from .client import chat
 
 
 LearningStage = Literal["diagnose", "explain", "practice", "remediate", "ready"]
@@ -61,12 +61,6 @@ RETRY_INSTRUCTION = "上一轮输出无效，请重新输出完整且符合结�
 FINAL_ERROR = "导师暂时无法生成有效回复"
 
 
-def _client(client: OpenAI | None) -> OpenAI:
-    if client is not None:
-        return client
-    return OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)
-
-
 def _user_payload(
     *,
     task_title: str,
@@ -106,23 +100,21 @@ def generate_tutor_turn(
         recent_turns=recent_turns,
         user_message=user_message,
     )
-    llm_client = _client(client)
     for attempt in range(3):
         prompt = user_payload if attempt == 0 else f"{user_payload}\n{RETRY_INSTRUCTION}"
         try:
-            response = llm_client.chat.completions.create(
-                model=model or settings.llm_model,
-                max_tokens=4000,
-                messages=[
+            text = chat(
+                [
                     {"role": "system", "content": TUTOR_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                response_format={"type": "json_object"},
+                model=model or settings.llm_model,
+                max_tokens=4000,
+                client=client,
             )
-            content = response.choices[0].message.content
-            if not isinstance(content, str) or not content.strip():
+            if not isinstance(text, str) or not text.strip():
                 raise ValueError("empty response")
-            output = TutorOutput.model_validate(json.loads(content))
+            output = TutorOutput.model_validate(json.loads(text))
             if user_message is None and output.stage != "diagnose":
                 raise ValueError("initial tutor stage must be diagnose")
             if already_ready and not output.ready_for_verification:
@@ -243,24 +235,30 @@ class TutorTurnStreamer:
             recent_turns=self._params["recent_turns"],
             user_message=self._params["user_message"],
         )
-        response = _client(self._params["client"]).chat.completions.create(
-            model=self._params["model"] or settings.llm_model,
-            max_tokens=4000,
-            messages=[
+        result = chat(
+            [
                 {"role": "system", "content": TUTOR_SYSTEM_PROMPT},
                 {"role": "user", "content": user_payload},
             ],
-            response_format={"type": "json_object"},
+            model=self._params["model"] or settings.llm_model,
+            max_tokens=4000,
+            client=self._params["client"],
             stream=True,
         )
-        for chunk in response:
-            content = chunk.choices[0].delta.content
-            if not isinstance(content, str) or not content:
-                continue
-            self.raw += content
-            piece = self._extractor.feed(content)
-            if piece:
-                yield piece
+        if isinstance(result, str):
+            if result:
+                self.raw = result
+                piece = self._extractor.feed(result)
+                if piece:
+                    yield piece
+        else:
+            for content in result:
+                if not content:
+                    continue
+                self.raw += content
+                piece = self._extractor.feed(content)
+                if piece:
+                    yield piece
         self.output = self._finalize()
 
     def _finalize(self) -> TutorOutput:

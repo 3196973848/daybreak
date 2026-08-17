@@ -2,10 +2,9 @@ import json
 from typing import Any, Literal
 from uuid import uuid4
 
-from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from ..config import settings
+from .client import chat
 
 
 class Question(BaseModel):
@@ -111,24 +110,15 @@ GRADE_DELIVER_PROMPT = """你是交付验收评审员。依据验收标准判断
 只输出 JSON：{"score": 0-1(达标度), "feedback": "中文评审意见"}。score>=0.7 表示达标。"""
 
 
-def _client(client: OpenAI | None) -> OpenAI:
-    if client is not None:
-        return client
-    return OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)
-
-
 def _parse(client, system_prompt, user_prompt, output_model, max_tokens=4000):
-    c = _client(client)
-    response = c.chat.completions.create(
-        model=settings.llm_model,
-        max_tokens=max_tokens,
-        messages=[
+    text = chat(
+        [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
+        max_tokens=max_tokens,
+        client=client,
     )
-    text = response.choices[0].message.content
     if not text:
         raise RuntimeError("LLM 返回为空")
     try:

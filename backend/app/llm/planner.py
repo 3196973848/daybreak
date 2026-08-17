@@ -1,10 +1,10 @@
 import json
 from typing import Any
 
-from openai import OpenAI
 from pydantic import ValidationError
 
 from ..config import settings
+from .client import chat
 from .schema import PlanSpec
 
 PLANNER_SYSTEM_PROMPT = """你是一个目标规划专家。请先自动识别目标涉及的知识领域，再把每个领域拆成具体子知识点对应的原子任务。
@@ -39,21 +39,14 @@ PLANNER_SYSTEM_PROMPT = """你是一个目标规划专家。请先自动识别�
 - 只输出 JSON，不要输出任何其他文字或 markdown"""
 
 
-def _client(client: OpenAI | None) -> OpenAI:
-    if client is not None:
-        return client
-    return OpenAI(api_key=settings.llm_api_key or None, base_url=settings.llm_base_url)
-
-
 def generate_plan(
     goal_title: str,
     description: str,
     target_date: str | None,
     daily_hours: float = 2.0,
     feedback: str | None = None,
-    client: OpenAI | None = None,
+    client=None,
 ) -> PlanSpec:
-    c = _client(client)
     user_prompt = (
         f"目标：{goal_title}\n"
         f"说明：{description or '无'}\n"
@@ -64,16 +57,15 @@ def generate_plan(
     if feedback:
         user_prompt += f"\n上次计划校验失败：{feedback}\n请修正后重新生成完整计划。"
     user_prompt += "\n请生成完整计划。"
-    response = c.chat.completions.create(
-        model=settings.llm_model,
-        max_tokens=16000,
-        messages=[
+    text = chat(
+        [
             {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
+        model=settings.llm_model,
+        max_tokens=16000,
+        client=client,
     )
-    text = response.choices[0].message.content
     if not text:
         raise RuntimeError("LLM 返回为空")
     return parse_plan_spec(text)
