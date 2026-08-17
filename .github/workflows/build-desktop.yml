@@ -59,15 +59,15 @@ jobs:
           cp dist/PlanAgent* "$dest/"
           cp planagent.conf.example "$dest/planagent.conf"
           cat > "$dest/使用说明.txt" <<'EOF'
-PlanAgent 本地版使用说明
+          PlanAgent 本地版使用说明
 
-1. 把 PlanAgent（Windows 为 PlanAgent.exe）和 planagent.conf 放在同一个文件夹。
-2. 用文本编辑器打开 planagent.conf，在 PLANAGENT_LLM_API_KEY= 后面填上你自己的
-   DeepSeek API Key（到 https://platform.deepseek.com 获取），保存。
-3. 双击运行。macOS 若提示无法验证开发者：右键点击 → 打开，或在终端执行
-   xattr -dr com.apple.quarantine PlanAgent
-4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
-EOF
+          1. 把 PlanAgent（Windows 为 PlanAgent.exe）和 planagent.conf 放在同一个文件夹。
+          2. 用文本编辑器打开 planagent.conf，在 PLANAGENT_LLM_API_KEY= 后面填上你自己的
+             DeepSeek API Key（到 https://platform.deepseek.com 获取），保存。
+          3. 双击运行。macOS 若提示无法验证开发者：右键点击 → 打开，或在终端执行
+             xattr -dr com.apple.quarantine PlanAgent
+          4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
+          EOF
 
       - name: Zip release
         shell: bash
