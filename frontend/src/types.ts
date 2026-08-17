@@ -39,6 +39,12 @@ export interface GoalDTO {
   plan?: PlanDTO
 }
 
+export interface UserDTO {
+  id: number
+  username: string
+  created_at: string
+}
+
 export interface TestQuestionDTO {
   id: number
   type: 'choice' | 'short'

@@ -1,6 +1,6 @@
 import type {
-  GoalDTO, LearningSessionDTO, TaskDTO, VerificationResult, VerificationStart,
-  VerificationSubmit,
+  GoalDTO, LearningSessionDTO, TaskDTO, UserDTO, VerificationResult,
+  VerificationStart, VerificationSubmit,
 } from '../types'
 
 const BASE = '/api'
@@ -45,6 +45,19 @@ export interface CreateGoalInput {
 }
 
 export const api = {
+  register: (username: string, password: string) =>
+    req<UserDTO>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  login: (username: string, password: string) =>
+    req<UserDTO>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () =>
+    req<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  me: () => req<UserDTO>('/auth/me'),
   createGoal: (body: CreateGoalInput) =>
     req<GoalDTO>('/goals', { method: 'POST', body: JSON.stringify(body) }),
   listGoals: () => req<GoalDTO[]>('/goals'),
