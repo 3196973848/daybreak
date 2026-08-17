@@ -1,9 +1,28 @@
+import sys
+from pathlib import Path
+
 from pydantic import AliasChoices, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _runtime_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+_CONF_FILE = _runtime_dir() / "planagent.conf"
 
 
 class Settings(BaseSettings):
-    database_url: str = "sqlite:///./planagent.db"
+    model_config = SettingsConfigDict(
+        env_prefix="PLANAGENT_",
+        extra="ignore",
+        env_file=_CONF_FILE,
+        env_file_encoding="utf-8",
+    )
+
+    database_url: str = f"sqlite:///{(_runtime_dir() / 'planagent.db').as_posix()}"
     blocks_per_day: int = 2
     hours_per_block: float = 1.0
     # LLM 配置(DeepSeek,OpenAI 兼容接口)
@@ -16,8 +35,7 @@ class Settings(BaseSettings):
     auth_secret: str = ""
     auth_session_ttl_days: int = 30
     auth_cookie_secure: bool = False
-
-    model_config = {"env_prefix": "PLANAGENT_", "extra": "ignore"}
+    auth_enabled: bool = True
 
 
 settings = Settings()

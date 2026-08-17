@@ -60,6 +60,27 @@ docker compose up -d --build
 - 对外公开请在前面加 HTTPS 反向代理（Caddy / Nginx），`PLANAGENT_AUTH_COOKIE_SECURE=true` 已在 compose 中设置。
 - 第一个注册的账号会自动接管升级前遗留的单用户数据。
 
+## 本地分发（Windows exe）
+
+把 `dist/PlanAgent.exe` 与 `planagent.conf` 放在同一目录分发给用户：
+
+1. 将 `planagent.conf.example` 改名为 `planagent.conf` 并填入用户自己的 `PLANAGENT_LLM_API_KEY`。
+2. 保持 `PLANAGENT_AUTH_ENABLED=false`，本地单用户模式无需登录。
+3. 双击 `PlanAgent.exe`，浏览器会自动打开 `http://127.0.0.1:8000`。
+
+数据保存在 exe 同目录的 `planagent.db` 中，备份该文件即可迁移。
+
+重新打包 exe：
+
+```bash
+python -m venv .venv_build
+.venv_build/Scripts/pip install -r backend/requirements.txt pyinstaller
+cd frontend && npm run build
+cd ..
+Copy-Item frontend/dist/* backend/static -Recurse -Force
+.venv_build/Scripts/pyinstaller planagent.spec --noconfirm --clean
+```
+
 ## 结构
 - `backend/app/llm` — LLM 编排(计划生成、检验出题/判分)
 - `backend/app/scheduler` — 确定性排程算法

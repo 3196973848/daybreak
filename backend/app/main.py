@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sys
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -27,7 +28,13 @@ def health():
     return {"status": "ok"}
 
 
-_DIST = Path(__file__).resolve().parent.parent / "static"
+def _static_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "static"
+    return Path(__file__).resolve().parent.parent / "static"
+
+
+_DIST = _static_dir()
 if _DIST.exists():
     app.mount(
         "/assets", StaticFiles(directory=_DIST / "assets"), name="assets"

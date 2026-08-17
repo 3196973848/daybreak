@@ -3,7 +3,10 @@
 __pycache__/
 *.pyc
 .venv/
+.venv_build/
 *.db
 .pytest_tmp/
 node_modules/
 dist/
+build/
+backend/static/

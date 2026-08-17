@@ -6,6 +6,7 @@ import secrets
 import time
 
 from fastapi import Depends, HTTPException, Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -83,6 +84,14 @@ def parse_session_token(token: str) -> int | None:
 def get_current_user(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
+    if not settings.auth_enabled:
+        user = db.scalar(select(User).where(User.username == "local"))
+        if user is None:
+            user = User(username="local", password_hash="")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
     token = request.cookies.get(COOKIE_NAME)
     user_id = parse_session_token(token) if token else None
     if user_id is None:

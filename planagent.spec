@@ -1,0 +1,53 @@
+# -*- mode: python ; coding: utf-8 -*-
+import os
+
+from PyInstaller.utils.hooks import collect_submodules
+
+
+_CONDA_BIN = r"D:\conda\envs\dl2025\Library\bin"
+_CONDA_DLLS = [
+    "ffi.dll",
+    "LIBBZ2.dll",
+    "libcrypto-3-x64.dll",
+    "libexpat.dll",
+    "liblzma.dll",
+    "libssl-3-x64.dll",
+    "libzstd.dll",
+    "sqlite3.dll",
+    "zlib.dll",
+]
+
+hiddenimports = (
+    collect_submodules("uvicorn")
+    + collect_submodules("openai")
+    + collect_submodules("sqlalchemy")
+    + collect_submodules("pydantic")
+    + collect_submodules("pydantic_settings")
+)
+
+a = Analysis(
+    ["backend/run_desktop.py"],
+    pathex=["backend"],
+    binaries=[(os.path.join(_CONDA_BIN, dll), ".") for dll in _CONDA_DLLS],
+    datas=[("backend/static", "static")],
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=["tests"],
+    noarchive=False,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name="PlanAgent",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+)
