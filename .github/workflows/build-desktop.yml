@@ -11,7 +11,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_suffix: windows-x64
+          - os: macos-latest
+            artifact_suffix: macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +52,7 @@ jobs:
       - name: Assemble release folder
         shell: bash
         run: |
-          os="${{ matrix.os }}"
-          dest="release/planagent-$os"
+          dest="release/planagent-${{ matrix.artifact_suffix }}"
           mkdir -p "$dest"
           cp dist/PlanAgent* "$dest/"
           cp planagent.conf.example "$dest/planagent.conf"
@@ -64,8 +67,29 @@ PlanAgent 本地版使用说明
 4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
 EOF
 
+      - name: Zip release
+        shell: bash
+        run: |
+          cd release
+          python -m zipfile -c "PlanAgent-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip" "planagent-${{ matrix.artifact_suffix }}"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: planagent-${{ matrix.os }}
-          path: release/planagent-${{ matrix.os }}
+          name: PlanAgent-${{ matrix.artifact_suffix }}
+          path: release/PlanAgent-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.zip
+          generate_release_notes: true
