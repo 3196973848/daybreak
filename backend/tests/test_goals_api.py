@@ -2,12 +2,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.goals import GoalCreate
-from app.models import Goal, Milestone, Plan, Task
+from app.models import Goal, Milestone, Plan, Task, User
 from app.services.capacity import InsufficientCapacityError
 
 
 def _build_goal(db_session):
-    goal = Goal(title="目标", description="说明")
+    user_id = db_session.query(User).filter_by(username="tester").one().id
+    goal = Goal(title="目标", description="说明", user_id=user_id)
     db_session.add(goal)
     plan = Plan(goal_id=0, strategy="策略")
     goal.plan = plan
@@ -29,6 +30,7 @@ def test_create_goal(client, db_session, monkeypatch):
         duration_value=None,
         duration_unit=None,
         daily_hours=2.0,
+        user_id=None,
     ):
         assert daily_hours == 2.0
         return _build_goal(db_session)
@@ -52,6 +54,7 @@ def test_create_goal_forwards_duration(client, db_session, monkeypatch):
         duration_value=None,
         duration_unit=None,
         daily_hours=2.0,
+        user_id=None,
     ):
         captured.update(
             target_date=target_date,

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("PLANAGENT_LLM_API_KEY", "DEEPSEEK_API_KEY"),
     )
+    auth_secret: str = ""
+    auth_session_ttl_days: int = 30
+    auth_cookie_secure: bool = False
 
     model_config = {"env_prefix": "PLANAGENT_", "extra": "ignore"}
 

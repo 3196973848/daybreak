@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.llm.tutor import TutorOutput
-from app.models import Goal, LearningSession, LearningTurn, Milestone, Plan, Task
+from app.models import Goal, LearningSession, LearningTurn, Milestone, Plan, Task, User
 
 
 MODEL_ERROR = "导师回复生成失败，请稍后重试"
@@ -13,7 +13,12 @@ TURN_PERSISTENCE_ERROR = "导师回复保存失败，请稍后重试"
 
 
 def _task(db_session, *, task_type="learn", effort=3.5):
-    goal = Goal(title="Learn Python", description="A goal description")
+    user_id = db_session.query(User).filter_by(username="tester").one().id
+    goal = Goal(
+        title="Learn Python",
+        description="A goal description",
+        user_id=user_id,
+    )
     plan = Plan(strategy="Practice daily")
     milestone = Milestone(title="Functions", order=1)
     task = Task(

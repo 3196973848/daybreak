@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StrictInt, field_validator, model_validator
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
-from ..models import Goal
+from ..models import Goal, User
 from ..services.capacity import InsufficientCapacityError
 from ..services.planner_service import create_goal_with_plan
 
@@ -90,7 +91,11 @@ def serialize_goal(goal, include_plan=False):
 
 
 @router.post("", status_code=201)
-def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
+def create_goal(
+    payload: GoalCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     try:
         goal = create_goal_with_plan(
             db,
@@ -100,6 +105,7 @@ def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
             duration_value=payload.duration_value,
             duration_unit=payload.duration_unit,
             daily_hours=payload.daily_hours,
+            user_id=user.id,
         )
     except InsufficientCapacityError as exc:
         raise HTTPException(status_code=422, detail=exc.as_detail())
@@ -109,22 +115,33 @@ def create_goal(payload: GoalCreate, db: Session = Depends(get_db)):
 
 
 @router.get("")
-def list_goals(db: Session = Depends(get_db)):
-    goals = db.query(Goal).order_by(Goal.created_at.desc()).all()
+def list_goals(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    goals = (
+        db.query(Goal)
+        .filter(Goal.user_id == user.id)
+        .order_by(Goal.created_at.desc())
+        .all()
+    )
     return [serialize_goal(g) for g in goals]
 
 
 @router.get("/{goal_id}")
-def get_goal(goal_id: int, db: Session = Depends(get_db)):
-    goal = db.get(Goal, goal_id)
+def get_goal(
+    goal_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == user.id).first()
     if not goal:
         raise HTTPException(status_code=404, detail="目标不存在")
     return serialize_goal(goal, include_plan=True)
 
 
 @router.delete("/{goal_id}")
-def delete_goal(goal_id: int, db: Session = Depends(get_db)):
-    goal = db.get(Goal, goal_id)
+def delete_goal(
+    goal_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == user.id).first()
     if not goal:
         raise HTTPException(status_code=404, detail="目标不存在")
     db.delete(goal)

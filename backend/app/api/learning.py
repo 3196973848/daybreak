@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
 from ..llm.tutor import LearningStage
-from ..models import LearningSession
+from ..models import LearningSession, Task, User
 from ..services.learning_service import (
     LearningGenerationError,
     LearningPersistenceError,
@@ -120,8 +121,20 @@ def _raise_public_error(error: Exception, *, operation: str) -> None:
     raise error
 
 
+def _owned_task(db: Session, task_id: int, user_id: int) -> Task:
+    task = db.get(Task, task_id)
+    if task is None or task.milestone.plan.goal.user_id != user_id:
+        raise HTTPException(status_code=404, detail=TASK_NOT_FOUND)
+    return task
+
+
 @router.get("/{task_id}/learning-session", response_model=LearningSessionResponse)
-def read_learning_session(task_id: int, db: Session = Depends(get_db)):
+def read_learning_session(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _owned_task(db, task_id, user.id)
     try:
         return _serialize(get_learning_session(db, task_id))
     except (
@@ -135,7 +148,12 @@ def read_learning_session(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{task_id}/learning-session", response_model=LearningSessionResponse)
-def begin_learning_session(task_id: int, db: Session = Depends(get_db)):
+def begin_learning_session(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _owned_task(db, task_id, user.id)
     try:
         return _serialize(start_learning_session(db, task_id))
     except (
@@ -150,8 +168,12 @@ def begin_learning_session(task_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/learning-session/turns", response_model=LearningSessionResponse)
 def create_learning_turn(
-    task_id: int, body: LearningTurnCreate, db: Session = Depends(get_db)
+    task_id: int,
+    body: LearningTurnCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    _owned_task(db, task_id, user.id)
     try:
         session, _ = add_learning_turn(
             db, task_id, str(body.client_turn_id), body.message

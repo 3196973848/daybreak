@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..auth import get_current_user
 from ..database import get_db
 from ..llm.verifier import (
     DeliverContent,
@@ -15,7 +16,7 @@ from ..llm.verifier import (
     grade_short_answers,
     score_test,
 )
-from ..models import Milestone, Task, VerificationRecord
+from ..models import Milestone, Task, User, VerificationRecord
 from .goals import serialize_task
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -64,11 +65,21 @@ def _historical_question_texts(content: str) -> list[str]:
     return texts
 
 
-@router.patch("/{task_id}")
-def set_complete(task_id: int, payload: TaskComplete, db: Session = Depends(get_db)):
+def _owned_task(db: Session, task_id: int, user_id: int) -> Task:
     task = db.get(Task, task_id)
-    if not task:
+    if task is None or task.milestone.plan.goal.user_id != user_id:
         raise HTTPException(status_code=404, detail="任务不存在")
+    return task
+
+
+@router.patch("/{task_id}")
+def set_complete(
+    task_id: int,
+    payload: TaskComplete,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    task = _owned_task(db, task_id, user.id)
     if payload.completed:
         task.status = "done"
         task.completed_at = task.completed_at or datetime.now()
@@ -84,10 +95,12 @@ def set_complete(task_id: int, payload: TaskComplete, db: Session = Depends(get_
 
 
 @router.get("/{task_id}/verification")
-def start_verification(task_id: int, db: Session = Depends(get_db)):
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+def start_verification(
+    task_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    task = _owned_task(db, task_id, user.id)
     try:
         if task.type == "learn":
             history = []
@@ -119,11 +132,12 @@ def start_verification(task_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/verification")
 def submit_verification(
-    task_id: int, payload: VerificationSubmit, db: Session = Depends(get_db)
+    task_id: int,
+    payload: VerificationSubmit,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    task = db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    task = _owned_task(db, task_id, user.id)
     record = db.get(VerificationRecord, payload.record_id)
     if not record or record.task_id != task.id:
         raise HTTPException(status_code=400, detail="检验记录不存在")

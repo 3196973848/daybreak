@@ -6,11 +6,12 @@ from sqlalchemy.exc import SQLAlchemyError, StatementError
 
 from app.database import engine
 from app.llm.verifier import DeliverContent, GradeResult, ShortGradeResult, TestContent
-from app.models import Goal, Milestone, Plan, Task, VerificationRecord
+from app.models import Goal, Milestone, Plan, Task, User, VerificationRecord
 
 
 def _build_task(db_session, task_type="learn"):
-    goal = Goal(title="目标")
+    user_id = db_session.query(User).filter_by(username="tester").one().id
+    goal = Goal(title="目标", user_id=user_id)
     db_session.add(goal)
     plan = Plan(goal_id=0, strategy="s")
     goal.plan = plan

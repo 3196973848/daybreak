@@ -26,6 +26,7 @@ def create_goal_with_plan(
     duration_value: int | None = None,
     duration_unit: DurationUnit | None = None,
     daily_hours: float = 2.0,
+    user_id: int | None = None,
 ) -> Goal:
     start = date.today()
     try:
@@ -79,7 +80,12 @@ def create_goal_with_plan(
                     minimum_days,
                 )
 
-        goal = Goal(title=title, description=description, target_date=target_date)
+        goal = Goal(
+            title=title,
+            description=description,
+            target_date=target_date,
+            user_id=user_id,
+        )
         db.add(goal)
         db.flush()
         scheduled = schedule(
