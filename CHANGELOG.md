@@ -2,9 +2,26 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2026-08-17
+
+首个对外发布版本（`v1.0.0` / `v1.0.1` 为内部占位标签、未产出安装包，已清理）。
+
+### 新增
+
+- 多模型提供方：DeepSeek / OpenAI / Claude / 本地 Ollama / 自定义 OpenAI 兼容端点。
+- 首次运行引导页：选择提供方、填写 API Key、选择默认模型，并写入 `planagent.conf`。
+- AI 导师流式回复、模型切换、Enter 发送（Shift+Enter 换行）。
+- iCal 日历导出。
+- 测试 CI、演示动画、中英文 README 完善。
+
+### 修复
+
+- 发布工作流 YAML 无效导致 GitHub Actions 无法生成 Release。
+- 旧数据库缺少 `goals.user_id` 时自动迁移。
+
 ## [1.0.0] - 2026-08-17
 
-首个正式发布版本。
+初始版本（内部占位，未对外发布）。
 
 ### 新增
 
