@@ -51,6 +51,35 @@ jobs:
         run: |
           python -m PyInstaller planagent.spec --noconfirm
 
+      - name: Sign macOS binary (optional)
+        if: runner.os == 'macOS' && env.AC_CERTIFICATE_BASE64 != ''
+        env:
+          AC_CERTIFICATE_BASE64: ${{ secrets.AC_CERTIFICATE_BASE64 }}
+          AC_P12_PASSWORD: ${{ secrets.AC_P12_PASSWORD }}
+          APPLE_CERT_NAME: ${{ secrets.APPLE_CERT_NAME }}
+          KEYCHAIN_NAME: planagent-signing
+        run: |
+          echo "$AC_CERTIFICATE_BASE64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "$AC_P12_PASSWORD" "$KEYCHAIN_NAME"
+          security default-keychain -s "$KEYCHAIN_NAME"
+          security unlock-keychain -p "$AC_P12_PASSWORD" "$KEYCHAIN_NAME"
+          security import /tmp/cert.p12 -P "$AC_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_NAME"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$AC_P12_PASSWORD" "$KEYCHAIN_NAME"
+          security list-keychains -d user -s "$KEYCHAIN_NAME"
+          codesign --force --options runtime --timestamp --deep -s "$APPLE_CERT_NAME" dist/PlanAgent
+
+      - name: Sign Windows executable (optional)
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_KEY_VAULT_NAME: ${{ secrets.AZURE_KEY_VAULT_NAME }}
+          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
+        uses: azure/actions-signed@v2
+        with:
+          files: dist/PlanAgent.exe
+
       - name: Assemble release folder
         shell: bash
         run: |
@@ -68,6 +97,26 @@ jobs:
              xattr -dr com.apple.quarantine PlanAgent
           4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
           EOF
+
+      - name: Self-sign Windows executable (optional)
+        if: runner.os == 'Windows' && env.WINDOWS_PFX_BASE64 != '' && env.WINDOWS_PFX_PASSWORD != ''
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          [System.IO.File]::WriteAllBytes("$env:RUNNER_TEMP\code-sign.pfx", [System.Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$env:RUNNER_TEMP\code-sign.pfx", $env:WINDOWS_PFX_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', 'CurrentUser')
+          $store.Open('ReadWrite')
+          $store.Add($cert)
+          $store.Close()
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter 'signtool.exe' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found' }
+          Get-ChildItem -Path dist -Filter 'PlanAgent*' | ForEach-Object {
+            & $signtool.FullName sign /f "$env:RUNNER_TEMP\code-sign.pfx" /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Zip release
         shell: bash
