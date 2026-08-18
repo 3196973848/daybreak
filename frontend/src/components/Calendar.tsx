@@ -1,6 +1,7 @@
 import { todayLocal } from '../utils/date'
+import { useI18n } from '../i18n'
 
-const WEEK = ['日', '一', '二', '三', '四', '五', '六']
+const WEEK_KEYS = ['weekSun', 'weekMon', 'weekTue', 'weekWed', 'weekThu', 'weekFri', 'weekSat']
 
 export function Calendar({
   year, month, selected, datesWithTasks, onSelect,
@@ -11,6 +12,7 @@ export function Calendar({
   datesWithTasks: Set<string>
   onSelect: (iso: string) => void
 }) {
+  const { t } = useI18n()
   const first = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const todayIso = todayLocal()
@@ -27,18 +29,18 @@ export function Calendar({
   return (
     <div className="card calendar">
       <div className="calendar-head">
-        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(-1)} aria-label="上个月">
+        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(-1)} aria-label={t('prevMonth')}>
           ‹
         </button>
-        <span className="calendar-month">{year}年{month + 1}月</span>
-        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(1)} aria-label="下个月">
+        <span className="calendar-month">{t('calendarMonth', { year, month: month + 1 })}</span>
+        <button type="button" className="btn-ghost btn-icon" onClick={() => onMonthChange(1)} aria-label={t('nextMonth')}>
           ›
         </button>
       </div>
 
       <div className="calendar-grid">
-        {WEEK.map((w) => (
-          <span key={w} className="calendar-weekday">{w}</span>
+        {WEEK_KEYS.map((key) => (
+          <span key={key} className="calendar-weekday">{t(key)}</span>
         ))}
         {cells.map((day, i) => {
           if (day === null) return <span key={`blank-${i}`} />
@@ -63,7 +65,7 @@ export function Calendar({
         })}
       </div>
 
-      <p className="calendar-legend">• 当天有任务</p>
+      <p className="calendar-legend">{t('calendarLegend')}</p>
     </div>
   )
 }

@@ -4,9 +4,10 @@ import { api } from '../api/client'
 import type { GoalDTO, MilestoneDTO } from '../types'
 import { ProgressBar } from '../components/ProgressBar'
 import { TopBar } from '../components/TopBar'
+import { useI18n } from '../i18n'
 import { IconCalendar, IconChevronDown } from '../components/icons'
 
-const STATUS_TEXT: Record<string, string> = { todo: '未开始', active: '进行中', done: '已完成' }
+const STATUS_KEY: Record<string, string> = { todo: 'notStarted', active: 'inProgress', done: 'done' }
 
 async function downloadCalendar(goalId: number) {
   const res = await fetch(`/api/goals/${goalId}/calendar.ics`)
@@ -28,22 +29,23 @@ function allTasks(plan?: GoalDTO['plan']): Array<{ status: string }> {
 
 export function PlanOverview() {
   const { id } = useParams()
+  const { t } = useI18n()
   const [goal, setGoal] = useState<GoalDTO | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!id) return
-    api.getGoal(Number(id)).then(setGoal).catch((e) => setError(e instanceof Error ? e.message : '加载失败'))
+    api.getGoal(Number(id)).then(setGoal).catch((e) => setError(e instanceof Error ? e.message : t('failedLoad')))
   }, [id])
 
   if (error) return <p className="error-text">{error}</p>
-  if (!goal) return <p className="faint">加载中…</p>
+  if (!goal) return <p className="faint">{t('loading')}</p>
   if (!goal.plan) {
     return (
       <>
         <TopBar title={goal.title} backTo="/" />
         <div className="page page-narrow">
-          <p className="error-text">此目标未生成计划（可能生成失败），请返回删除后重试。</p>
+          <p className="error-text">{t('noPlan')}</p>
         </div>
       </>
     )
@@ -58,24 +60,26 @@ export function PlanOverview() {
       <div className="page">
         <header className="page-head">
           <div>
-            <p className="eyebrow">计划总览</p>
+            <p className="eyebrow">{t('overviewEyebrow')}</p>
             <h1 className="page-title">{goal.title}</h1>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-ghost" onClick={() => void downloadCalendar(goal.id)}>
               <IconCalendar size={14} />
-              导出日历
+              {t('exportCalendar')}
             </button>
             <Link to={`/goals/${goal.id}/daily`} className="btn-ghost">
               <IconCalendar size={14} />
-              每日任务
+              {t('dailyTasks')}
             </Link>
           </div>
         </header>
 
         <div className="card" style={{ padding: 18 }}>
           <ProgressBar done={done} total={tasks.length} />
-          <p className="dim" style={{ fontSize: 13, marginTop: 14 }}>策略：{goal.plan.strategy}</p>
+          <p className="dim" style={{ fontSize: 13, marginTop: 14 }}>
+            {t('strategyLabel', { strategy: goal.plan.strategy })}
+          </p>
         </div>
 
         <div style={{ marginTop: 22 }}>
@@ -87,6 +91,7 @@ export function PlanOverview() {
 }
 
 function MilestoneCard({ m }: { m: MilestoneDTO }) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const done = m.tasks.filter((t) => t.status === 'done').length
   const statusClass = m.status === 'done' ? 'done' : m.status === 'active' ? 'active' : ''
@@ -105,10 +110,10 @@ function MilestoneCard({ m }: { m: MilestoneDTO }) {
           <div className="milestone-meta">
             <span className={`badge ${statusClass}`}>
               <span className="badge-dot" />
-              {STATUS_TEXT[m.status] ?? m.status}
+              {t(STATUS_KEY[m.status] ?? m.status)}
             </span>
-            {m.due_date && <span className="mono">截止 {m.due_date}</span>}
-            <span>{done}/{m.tasks.length} 完成</span>
+            {m.due_date && <span className="mono">{t('dueLabel', { date: m.due_date })}</span>}
+            <span>{t('doneCount', { done, total: m.tasks.length })}</span>
           </div>
           {m.description && <p className="milestone-desc">{m.description}</p>}
         </div>
@@ -120,18 +125,18 @@ function MilestoneCard({ m }: { m: MilestoneDTO }) {
       <div className={`collapse ${open ? 'open' : ''}`}>
         <div>
           <div className="task-list">
-            {m.tasks.map((t) => (
-              <div key={t.id} className="task-line">
-                <span className={`task-check ${t.status === 'done' ? 'done' : ''}`}>
-                  {t.status === 'done' ? '✓' : '○'}
+            {m.tasks.map((task) => (
+              <div key={task.id} className="task-line">
+                <span className={`task-check ${task.status === 'done' ? 'done' : ''}`}>
+                  {task.status === 'done' ? '✓' : '○'}
                 </span>
-                <span className={`task-title ${t.status === 'done' ? 'done' : ''}`}>{t.title}</span>
-                {t.verified && <span className="verified">已验证</span>}
-                <span className="task-date">{t.scheduled_date ?? ''}</span>
+                <span className={`task-title ${task.status === 'done' ? 'done' : ''}`}>{task.title}</span>
+                {task.verified && <span className="verified">{t('verified')}</span>}
+                <span className="task-date">{task.scheduled_date ?? ''}</span>
               </div>
             ))}
             {m.tasks.length === 0 && (
-              <p className="faint" style={{ padding: '7px 0', fontSize: 12 }}>此阶段暂无任务</p>
+              <p className="faint" style={{ padding: '7px 0', fontSize: 12 }}>{t('noStageTasks')}</p>
             )}
           </div>
         </div>

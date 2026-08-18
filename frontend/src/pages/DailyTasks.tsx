@@ -5,23 +5,19 @@ import type { GoalDTO, TaskDTO } from '../types'
 import { Calendar } from '../components/Calendar'
 import { VerificationModal } from '../components/VerificationModal'
 import { TopBar } from '../components/TopBar'
+import { useI18n } from '../i18n'
 import { IconCheck, IconClipboard } from '../components/icons'
 import { todayLocal } from '../utils/date'
 
-const TYPE_TEXT: Record<string, string> = { learn: '学习', practice: '实操', project: '项目' }
-const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
+const TYPE_KEY: Record<string, string> = { learn: 'typeLearn', practice: 'typePractice', project: 'typeProject' }
 
 function toKey(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : '未排期'
-}
-
-function weekdayOf(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
-  return Number.isNaN(d.getTime()) ? '' : WEEKDAYS[d.getDay()]
+  return iso ? iso.slice(0, 10) : 'none'
 }
 
 export function DailyTasks() {
   const { id } = useParams()
+  const { t } = useI18n()
   const [goal, setGoal] = useState<GoalDTO | null>(null)
   const [selected, setSelected] = useState(todayLocal)
   const [verifyTask, setVerifyTask] = useState<TaskDTO | null>(null)
@@ -77,17 +73,17 @@ export function DailyTasks() {
         },
       } : g))
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作失败')
+      setError(e instanceof Error ? e.message : t('actionFailed'))
     }
   }
 
-  if (!goal) return <p className="faint">加载中…</p>
+  if (!goal) return <p className="faint">{t('loading')}</p>
   if (!goal.plan) {
     return (
       <>
         <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
         <div className="page page-narrow">
-          <p className="error-text">此目标未生成计划。</p>
+          <p className="error-text">{t('noPlan')}</p>
         </div>
       </>
     )
@@ -99,7 +95,7 @@ export function DailyTasks() {
       <div className="page">
         <header className="page-head">
           <div>
-            <p className="eyebrow">每日任务</p>
+            <p className="eyebrow">{t('dailyEyebrow')}</p>
             <h1 className="page-title">{goal.title}</h1>
           </div>
         </header>
@@ -108,42 +104,44 @@ export function DailyTasks() {
         <div className="daily-layout">
           <div className="card daily-list">
             <div className="daily-list-head">
-              <div className="daily-date">{selected} · 周{weekdayOf(selected)}</div>
-              <div className="daily-hint">点击任务左侧圆点，标记完成</div>
+              <div className="daily-date">
+                {selected} · {weekdayLabel(t, selected)}
+              </div>
+              <div className="daily-hint">{t('clickToComplete')}</div>
             </div>
 
             {dayTasks.length === 0 && (
-              <div className="empty">这一天没有安排任务，换个日期看看</div>
+              <div className="empty">{t('noTasksDay')}</div>
             )}
 
-            {dayTasks.map((t) => (
-              <div key={t.id} className="card row-hover task-card">
+            {dayTasks.map((task) => (
+              <div key={task.id} className="card row-hover task-card">
                 <button
                   type="button"
-                  className={`circle-dot ${t.status === 'done' ? 'done' : ''}`}
-                  onClick={() => void toggle(t)}
-                  aria-label={t.status === 'done' ? '标记未完成' : '标记完成'}
+                  className={`circle-dot ${task.status === 'done' ? 'done' : ''}`}
+                  onClick={() => void toggle(task)}
+                  aria-label={task.status === 'done' ? t('markUndone') : t('markDone')}
                 >
-                  {t.status === 'done' && <IconCheck size={13} />}
+                  {task.status === 'done' && <IconCheck size={13} />}
                 </button>
 
                 <div className="task-main">
-                  <div className={`task-name ${t.status === 'done' ? 'done' : ''}`}>{t.title}</div>
+                  <div className={`task-name ${task.status === 'done' ? 'done' : ''}`}>{task.title}</div>
                   <div className="task-meta">
-                    <span className="task-type">{TYPE_TEXT[t.type] ?? t.type}</span>
-                    <span>约 {t.effort} 小时</span>
-                    {t.verified && <span className="verified">已验证</span>}
+                    <span className="task-type">{t(TYPE_KEY[task.type] ?? task.type)}</span>
+                    <span>{t('hoursShort', { n: task.effort })}</span>
+                    {task.verified && <span className="verified">{t('verified')}</span>}
                   </div>
                 </div>
 
-                <button className="btn-ghost" onClick={() => setVerifyTask(t)}>
+                <button className="btn-ghost" onClick={() => setVerifyTask(task)}>
                   <IconClipboard size={14} />
-                  检验
+                  {t('verify')}
                 </button>
 
-                {t.type === 'learn' && (
-                  <Link to={`/tasks/${t.id}/learn`} className="btn-ghost">
-                    {learningStates[t.id] ? '继续学习' : '开始学习'}
+                {task.type === 'learn' && (
+                  <Link to={`/tasks/${task.id}/learn`} className="btn-ghost">
+                    {learningStates[task.id] ? t('continueLearning') : t('startLearning')}
                   </Link>
                 )}
               </div>
@@ -171,4 +169,11 @@ export function DailyTasks() {
       </div>
     </>
   )
+}
+
+function weekdayLabel(t: (key: string) => string, iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  const keys = ['weekSun', 'weekMon', 'weekTue', 'weekWed', 'weekThu', 'weekFri', 'weekSat']
+  return t(keys[d.getDay()])
 }

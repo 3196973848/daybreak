@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { TopBar } from '../components/TopBar'
+import { useI18n } from '../i18n'
 import type { ProviderDTO, SettingsDTO } from '../types'
 
 
 export function SetupPage() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [settings, setSettings] = useState<SettingsDTO | null>(null)
   const [providerId, setProviderId] = useState('deepseek')
   const [apiKey, setApiKey] = useState('')
@@ -47,7 +49,7 @@ export function SetupPage() {
     event.preventDefault()
     if (!provider) return
     if (provider.requires_key && !apiKey.trim()) {
-      setError('请填写 API Key')
+      setError(t('keyRequired'))
       return
     }
     setSaving(true)
@@ -61,14 +63,14 @@ export function SetupPage() {
       })
       navigate('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
+      setError(err instanceof Error ? err.message : t('saveFailed'))
     } finally {
       setSaving(false)
     }
   }
 
   if (!settings) {
-    return <div className="page"><p className="faint">加载中…</p></div>
+    return <div className="page"><p className="faint">{t('loading')}</p></div>
   }
 
   return (
@@ -76,9 +78,9 @@ export function SetupPage() {
       <TopBar />
       <div className="page page-narrow">
         <header className="hero">
-          <p className="eyebrow">首次设置</p>
-          <h1 className="hero-title">选择你的 AI 提供方</h1>
-          <p className="hero-sub">填入 API Key 后即可开始；Key 只保存在本机配置文件中。</p>
+          <p className="eyebrow">{t('setupEyebrow')}</p>
+          <h1 className="hero-title">{t('setupTitle')}</h1>
+          <p className="hero-sub">{t('setupSub')}</p>
         </header>
 
         <form className="card form-card" onSubmit={submit}>
@@ -91,14 +93,14 @@ export function SetupPage() {
                 onClick={() => chooseProvider(item.id)}
               >
                 <strong>{item.name}</strong>
-                <span>{item.requires_key ? '需要 API Key' : '本地运行，无需 Key'}</span>
+                <span>{item.requires_key ? t('needsKey') : t('localNoKey')}</span>
               </button>
             ))}
           </div>
 
           {provider?.requires_key && (
             <div className="field">
-              <label className="field-label" htmlFor="setup-key">API Key</label>
+              <label className="field-label" htmlFor="setup-key">{t('apiKey')}</label>
               <input
                 id="setup-key"
                 className="input"
@@ -113,7 +115,7 @@ export function SetupPage() {
 
           {providerId === 'custom' && (
             <div className="field">
-              <label className="field-label" htmlFor="setup-base">Base URL（OpenAI 兼容）</label>
+              <label className="field-label" htmlFor="setup-base">{t('baseUrl')}</label>
               <input
                 id="setup-base"
                 className="input"
@@ -125,7 +127,7 @@ export function SetupPage() {
           )}
 
           <div className="field">
-            <label className="field-label" htmlFor="setup-model">默认模型</label>
+            <label className="field-label" htmlFor="setup-model">{t('defaultModel')}</label>
             <select
               id="setup-model"
               className="input"
@@ -141,7 +143,7 @@ export function SetupPage() {
           {error && <p className="error-text" role="alert">{error}</p>}
 
           <button className="btn btn-block" disabled={saving}>
-            {saving ? '保存中…' : '保存并开始'}
+            {saving ? t('saving') : t('saveStart')}
           </button>
         </form>
       </div>

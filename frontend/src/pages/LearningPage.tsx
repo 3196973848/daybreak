@@ -5,23 +5,16 @@ import { useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { TopBar } from '../components/TopBar'
 import { VerificationModal } from '../components/VerificationModal'
+import { useI18n } from '../i18n'
 import type { LearningSessionDTO, LearningStage, TaskDTO } from '../types'
 
-const STAGE_ORDER: Array<{ key: LearningStage; label: string }> = [
-  { key: 'diagnose', label: '诊断' },
-  { key: 'explain', label: '讲解' },
-  { key: 'practice', label: '练习' },
-  { key: 'remediate', label: '补强' },
-  { key: 'ready', label: 'ready' },
+const STAGE_KEYS: Array<{ key: LearningStage; labelKey: string }> = [
+  { key: 'diagnose', labelKey: 'stageDiagnose' },
+  { key: 'explain', labelKey: 'stageExplain' },
+  { key: 'practice', labelKey: 'stagePractice' },
+  { key: 'remediate', labelKey: 'stageRemediate' },
+  { key: 'ready', labelKey: 'stageReady' },
 ]
-
-const STAGE_LABELS: Record<LearningStage, string> = {
-  diagnose: '诊断',
-  explain: '讲解',
-  practice: '练习',
-  remediate: '补强',
-  ready: '已准备好',
-}
 
 interface PendingSubmission {
   client_turn_id: string
@@ -49,6 +42,7 @@ function taskFromSession(session: LearningSessionDTO): TaskDTO {
 
 export function LearningPage() {
   const { taskId } = useParams()
+  const { t } = useI18n()
   const numericTaskId = Number(taskId)
   const routeVersion = useRef(0)
   const [session, setSession] = useState<LearningSessionDTO | null>(null)
@@ -96,7 +90,7 @@ export function LearningPage() {
     async function load() {
       if (!taskId || !Number.isFinite(numericTaskId)) {
         if (active) {
-          setError('任务编号无效')
+          setError(t('invalidTask'))
           setLoading(false)
         }
         return
@@ -108,7 +102,7 @@ export function LearningPage() {
       } catch (loadError) {
         if (!active) return
         if (!(loadError instanceof ApiError) || loadError.status !== 404) {
-          if (active) setError(messageFrom(loadError, '加载学习记录失败'))
+          if (active) setError(messageFrom(loadError, t('loadSessionFailed')))
           return
         }
 
@@ -117,7 +111,7 @@ export function LearningPage() {
           const started = await api.startLearningSession(numericTaskId)
           if (active) setSession(started)
         } catch (startError) {
-          if (active) setError(messageFrom(startError, '创建学习会话失败'))
+          if (active) setError(messageFrom(startError, t('createSessionFailed')))
         } finally {
           if (active) setPreparing(false)
         }
@@ -130,7 +124,7 @@ export function LearningPage() {
     return () => {
       active = false
     }
-  }, [numericTaskId, taskId])
+  }, [numericTaskId, taskId, t])
 
   async function send(body: PendingSubmission) {
     const version = routeVersion.current
@@ -174,21 +168,21 @@ export function LearningPage() {
   }
 
   const liveStatus = preparing
-    ? '导师正在准备诊断问题'
+    ? t('livePreparing')
     : sending
-      ? '导师正在思考'
+      ? t('liveThinking')
       : loading
-        ? '正在加载学习记录'
+        ? t('liveLoading')
         : ''
 
   const stageIndex = session
-    ? STAGE_ORDER.findIndex((item) => item.key === session.stage)
+    ? STAGE_KEYS.findIndex((item) => item.key === session.stage)
     : -1
 
   return (
     <>
       <TopBar
-        title={session?.task_title ?? '导师学习'}
+        title={session?.task_title ?? t('tutorSessionTitle')}
         backTo={session ? `/goals/${session.goal_id}/daily` : undefined}
       />
       <div className="page learning-page">
@@ -202,7 +196,7 @@ export function LearningPage() {
             <header className="learning-header">
               <div className="learning-header-top">
                 <div>
-                  <p className="learning-eyebrow">AI 导师</p>
+                  <p className="learning-eyebrow">{t('tutorEyebrow')}</p>
                   <h1>{session.task_title}</h1>
                   {session.task_description && <p>{session.task_description}</p>}
                 </div>
@@ -211,16 +205,16 @@ export function LearningPage() {
                   disabled={verificationPassed}
                   onClick={() => setVerificationTask(taskFromSession(session))}
                 >
-                  {verificationPassed ? '检验已通过' : '开始检验'}
+                  {verificationPassed ? t('verificationPassed') : t('startVerify')}
                 </button>
               </div>
-              <div className="stage" aria-label="学习阶段">
-                {STAGE_ORDER.map((item, index) => (
+              <div className="stage" aria-label={t('stageLabel')}>
+                {STAGE_KEYS.map((item, index) => (
                   <Fragment key={item.key}>
                     {index > 0 && <span className="stage-conn" />}
                     <span className={`stage-node ${index <= stageIndex ? 'on' : ''}`}>
                       <span className="stage-dot" />
-                      {item.label}
+                      {t(item.labelKey)}
                     </span>
                   </Fragment>
                 ))}
@@ -228,10 +222,10 @@ export function LearningPage() {
             </header>
 
             <div className="learning-layout">
-              <aside className="card learning-status-card" aria-label="学习状态">
+              <aside className="card learning-status-card" aria-label={t('learningStatus')}>
                 {models.length > 0 && (
                   <div className="field learning-model-field">
-                    <label className="field-label" htmlFor="tutor-model">模型</label>
+                    <label className="field-label" htmlFor="tutor-model">{t('modelLabel')}</label>
                     <select
                       id="tutor-model"
                       className="input"
@@ -246,49 +240,49 @@ export function LearningPage() {
                     </select>
                   </div>
                 )}
-                <h2>学习状态</h2>
+                <h2>{t('learningStatus')}</h2>
                 <dl className="learning-status-summary">
                   <div>
-                    <dt>当前阶段</dt>
-                    <dd>{STAGE_LABELS[session.stage]}</dd>
+                    <dt>{t('currentStage')}</dt>
+                    <dd>{t(STAGE_KEYS.find((item) => item.key === session.stage)?.labelKey ?? session.stage)}</dd>
                   </div>
                   <div>
-                    <dt>预计时长</dt>
-                    <dd>{session.estimated_hours_snapshot} 小时</dd>
+                    <dt>{t('estHours')}</dt>
+                    <dd>{t('hoursValue', { n: session.estimated_hours_snapshot })}</dd>
                   </div>
                 </dl>
 
                 <section className="learning-points">
-                  <h3>已掌握</h3>
+                  <h3>{t('covered')}</h3>
                   {session.covered_points.length > 0 ? (
                     <ul>{session.covered_points.map((point) => <li key={point}>{point}</li>)}</ul>
-                  ) : <p>尚未记录</p>}
+                  ) : <p>{t('noCovered')}</p>}
                 </section>
 
                 <section className="learning-points learning-weak-points">
-                  <h3>待加强</h3>
+                  <h3>{t('weak')}</h3>
                   {session.weak_points.length > 0 ? (
                     <ul>{session.weak_points.map((point) => <li key={point}>{point}</li>)}</ul>
-                  ) : <p>暂未发现</p>}
+                  ) : <p>{t('noWeak')}</p>}
                 </section>
 
                 {session.ready_for_verification && !verificationPassed && (
-                  <p className="learning-ready">建议开始检验</p>
+                  <p className="learning-ready">{t('readyHint')}</p>
                 )}
               </aside>
 
-              <main className="card learning-chat" aria-label="导师对话">
+              <main className="card learning-chat" aria-label={t('chatLabel')}>
                 <div className="learning-turns">
                   {session.turns.map((turn) => (
                     <article className="learning-turn" key={turn.id}>
                       {turn.user_message !== null && (
                         <div className="learning-message learning-user-message">
-                          <span className="learning-message-label">你</span>
+                          <span className="learning-message-label">{t('youLabel')}</span>
                           <p>{turn.user_message}</p>
                         </div>
                       )}
                       <div className="learning-message learning-assistant-message">
-                        <span className="learning-message-label">导师</span>
+                        <span className="learning-message-label">{t('tutorLabel')}</span>
                         <div className="learning-markdown">
                           <ReactMarkdown skipHtml>{turn.assistant_message}</ReactMarkdown>
                         </div>
@@ -297,14 +291,14 @@ export function LearningPage() {
                   ))}
                   {streamingText !== '' && (
                     <div className="learning-message learning-assistant-message">
-                      <span className="learning-message-label">导师</span>
+                      <span className="learning-message-label">{t('tutorLabel')}</span>
                       <p>{streamingText}<span className="learning-stream-cursor" /></p>
                     </div>
                   )}
                 </div>
 
                 <form className="learning-composer" onSubmit={submit}>
-                  <label htmlFor="learning-reply">回复导师</label>
+                  <label htmlFor="learning-reply">{t('replyLabel')}</label>
                   <textarea
                     id="learning-reply"
                     value={draft}
@@ -316,7 +310,7 @@ export function LearningPage() {
                       }
                     }}
                     disabled={loading || sending || pending !== null}
-                    placeholder="Enter 发送，Shift+Enter 换行"
+                    placeholder={t('replyPlaceholder')}
                     rows={4}
                   />
                   {error && <p className="error-text" role="alert">{error}</p>}
@@ -328,7 +322,7 @@ export function LearningPage() {
                         disabled={sending}
                         onClick={() => void send(pending)}
                       >
-                        重试
+                        {t('retry')}
                       </button>
                     )}
                     <button
@@ -336,7 +330,7 @@ export function LearningPage() {
                       type="submit"
                       disabled={loading || sending || pending !== null || !draft.trim()}
                     >
-                      {sending ? '发送中' : '发送'}
+                      {sending ? t('sending') : t('send')}
                     </button>
                   </div>
                 </form>

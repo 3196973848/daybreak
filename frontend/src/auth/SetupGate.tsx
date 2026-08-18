@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 
 import { api } from '../api/client'
+import { useI18n } from '../i18n'
 import type { SettingsDTO } from '../types'
 
 
@@ -33,6 +34,7 @@ function loadSettings(): Promise<SettingsDTO> {
 export function SetupGate({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SettingsDTO | null>(null)
   const location = useLocation()
+  const { t } = useI18n()
 
   useEffect(() => {
     let active = true
@@ -45,7 +47,7 @@ export function SetupGate({ children }: { children: ReactNode }) {
   }, [])
 
   if (!settings) {
-    return <div className="page"><p className="faint">加载中…</p></div>
+    return <div className="page"><p className="faint">{t('loading')}</p></div>
   }
   if (!settings.configured && location.pathname !== '/setup') {
     return <Navigate to="/setup" replace />

@@ -3,12 +3,14 @@ import { api } from '../api/client'
 import type {
   DeliverContentDTO, TaskDTO, TestContentDTO, VerificationResult,
 } from '../types'
+import { useI18n } from '../i18n'
 import { IconX } from './icons'
 
 export function VerificationModal({
-  task, onClose, onVerified,
+  task: taskDto, onClose, onVerified,
 }: { task: TaskDTO; onClose: () => void; onVerified?: (result: VerificationResult) => void }) {
-  const mode = task.type === 'learn' ? 'test' : 'deliver'
+  const { t } = useI18n()
+  const mode = taskDto.type === 'learn' ? 'test' : 'deliver'
   const [recordId, setRecordId] = useState(0)
   const [content, setContent] = useState<TestContentDTO | DeliverContentDTO | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
@@ -19,6 +21,7 @@ export function VerificationModal({
   const [result, setResult] = useState<VerificationResult | null>(null)
   const [error, setError] = useState('')
   const submissionAttempt = useRef(0)
+  const task = taskDto
 
   useEffect(() => {
     submissionAttempt.current += 1
@@ -42,7 +45,7 @@ export function VerificationModal({
         setContent(start.content)
       })
       .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : '加载失败')
+        if (active) setError(e instanceof Error ? e.message : t('failedLoad'))
       })
       .finally(() => {
         if (active) setGenerating(false)
@@ -52,7 +55,7 @@ export function VerificationModal({
 
   async function submit() {
     if (recordId === 0 || content === null) {
-      setError('检验内容尚未加载，无法提交')
+      setError(t('verificationNotReady'))
       return
     }
     const attempt = ++submissionAttempt.current
@@ -68,7 +71,7 @@ export function VerificationModal({
       onVerified?.(res)
     } catch (e) {
       if (submissionAttempt.current === attempt) {
-        setError(e instanceof Error ? e.message : '提交失败')
+        setError(e instanceof Error ? e.message : t('submitFailed'))
       }
     } finally {
       if (submissionAttempt.current === attempt) setSubmitting(false)
@@ -77,7 +80,7 @@ export function VerificationModal({
 
   const testContent = mode === 'test' ? content as TestContentDTO : null
   const deliverContent = mode === 'deliver' ? content as DeliverContentDTO : null
-  const generationLabel = mode === 'test' ? '正在生成 10 道题' : '正在生成验收标准'
+  const generationLabel = mode === 'test' ? t('generatingTest') : t('generatingCriteria')
   const generationMessage = `${generationLabel}…`
 
   return (
@@ -85,12 +88,12 @@ export function VerificationModal({
       <div className="card modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <div className="modal-title">检验 · {task.title}</div>
+            <div className="modal-title">{t('verifyTitle', { t: task.title })}</div>
             <p className="modal-sub">
-              {mode === 'test' ? '测试模式 · 答对 70% 即通过' : '交付模式 · 提交成果描述，评审是否达标'}
+              {mode === 'test' ? t('testSub') : t('deliverSub')}
             </p>
           </div>
-          <button className="btn-ghost btn-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn-ghost btn-icon" onClick={onClose} aria-label={t('close')}>
             <IconX size={14} />
           </button>
         </div>
@@ -100,37 +103,39 @@ export function VerificationModal({
         {result ? (
           <div>
             <div className={`result-title ${result.passed ? 'result-pass' : 'result-fail'}`}>
-              {result.passed ? '✓ 检验通过' : '✗ 未通过'}
+              {result.passed ? t('passed') : t('failed')}
             </div>
             {mode === 'test' && result.points !== undefined ? (
               <>
-                <div className="verification-total">总分：{result.points} / 100</div>
+                <div className="verification-total">{t('totalScore', { points: result.points })}</div>
                 {result.details && (
                   <ol className="verification-details">
-                    {result.details.map((detail) => (
-                      <li key={detail.id} value={detail.id} data-testid={`verification-detail-${detail.id}`}>
+                    {result.details.map((d) => (
+                      <li key={d.id} value={d.id} data-testid={`verification-detail-${d.id}`}>
                         <div className="verification-detail-heading">
-                          <strong>第 {detail.id} 题</strong>
-                          {detail.type === 'choice' ? (
-                            <span>{detail.correct === true ? '正确' : '错误'} · {detail.points} / 10 分</span>
+                          <strong>{t('questionNo', { n: d.id })}</strong>
+                          {d.type === 'choice' ? (
+                            <span>
+                              {d.correct === true ? t('correct') : t('wrong')} · {t('pointsPer', { n: d.points })}
+                            </span>
                           ) : (
-                            <span>{detail.points} / 10 分</span>
+                            <span>{t('pointsPer', { n: d.points })}</span>
                           )}
                         </div>
-                        {detail.type === 'choice' && detail.correct_answer != null && (
-                          <div className="dim">正确答案：{detail.correct_answer}</div>
+                        {d.type === 'choice' && d.correct_answer != null && (
+                          <div className="dim">{t('correctAnswer')}：{d.correct_answer}</div>
                         )}
-                        {detail.feedback && <p>{detail.feedback}</p>}
+                        {d.feedback && <p>{d.feedback}</p>}
                       </li>
                     ))}
                   </ol>
                 )}
               </>
             ) : (
-              <div className="score">得分：{Math.round(result.score * 100)}%</div>
+              <div className="score">{t('scorePct', { score: Math.round(result.score * 100) })}</div>
             )}
             <p className="feedback">{result.feedback}</p>
-            <button className="btn btn-block" style={{ marginTop: 18 }} onClick={onClose}>关闭</button>
+            <button className="btn btn-block" style={{ marginTop: 18 }} onClick={onClose}>{t('close')}</button>
           </div>
         ) : generating ? (
           <div className="verification-loading">
@@ -139,14 +144,14 @@ export function VerificationModal({
               className="verification-progress"
               role="progressbar"
               aria-label={generationLabel}
-              aria-valuetext="生成中"
+              aria-valuetext={t('generatingInProgress')}
             ><span /></div>
           </div>
         ) : content === null ? (
           <div className="modal-actions">
-            <button className="btn-ghost" onClick={onClose}>取消</button>
+            <button className="btn-ghost" onClick={onClose}>{t('cancel')}</button>
             <button className="btn" onClick={() => setGenerationAttempt((attempt) => attempt + 1)}>
-              重新生成
+              {t('regenerate')}
             </button>
           </div>
         ) : (
@@ -171,7 +176,7 @@ export function VerificationModal({
                     className="input"
                     value={answers[q.id] ?? ''}
                     onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                    placeholder="写下你的回答…"
+                    placeholder={t('writeAnswer')}
                   />
                 )}
               </div>
@@ -179,12 +184,12 @@ export function VerificationModal({
 
             {deliverContent && (
               <div className="question">
-                <p className="question-text">验收标准</p>
+                <p className="question-text">{t('acceptance')}</p>
                 <p className="feedback">{deliverContent.acceptance_criteria}</p>
                 <textarea
                   className="input"
                   style={{ marginTop: 10 }}
-                  placeholder="填写你的实现成果 / 代码链接 / 说明……"
+                  placeholder={t('submissionPlaceholder')}
                   value={submission}
                   onChange={(e) => setSubmission(e.target.value)}
                 />
@@ -192,9 +197,9 @@ export function VerificationModal({
             )}
 
             <div className="modal-actions">
-              <button className="btn-ghost" onClick={onClose}>取消</button>
+              <button className="btn-ghost" onClick={onClose}>{t('cancel')}</button>
               <button className="btn" disabled={submitting} onClick={() => void submit()}>
-                {submitting ? 'AI 评审中…' : mode === 'test' ? '提交检验' : '提交评审'}
+                {submitting ? t('reviewing') : mode === 'test' ? t('submitTest') : t('submitDeliver')}
               </button>
             </div>
           </>

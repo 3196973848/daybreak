@@ -5,6 +5,7 @@ import type { DurationUnit } from '../api/client'
 import type { GoalDTO } from '../types'
 import { GoalList } from '../components/GoalList'
 import { TopBar } from '../components/TopBar'
+import { useI18n } from '../i18n'
 import { todayLocal } from '../utils/date'
 
 interface InsufficientCapacityDetail {
@@ -29,6 +30,7 @@ function isInsufficientCapacityDetail(detail: unknown): detail is InsufficientCa
 
 export function GoalInput() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const today = todayLocal()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -49,7 +51,7 @@ export function GoalInput() {
     if (!title.trim()) return
     const parsedDuration = Number(durationValue)
     if (!Number.isInteger(parsedDuration) || parsedDuration <= 0) {
-      setDurationError('预期完成时间必须是正整数')
+      setDurationError(t('durationError'))
       return
     }
     setDurationError('')
@@ -59,7 +61,7 @@ export function GoalInput() {
       || parsedDailyHours <= 0
       || !Number.isInteger(parsedDailyHours * 2)
     ) {
-      setDailyHoursError('每日可投入时间必须是 0.5 小时的正数倍')
+      setDailyHoursError(t('dailyHoursError'))
       return
     }
     setDailyHoursError('')
@@ -77,11 +79,13 @@ export function GoalInput() {
     } catch (err) {
       if (err instanceof ApiError && isInsufficientCapacityDetail(err.detail)) {
         const detail = err.detail
-        setError(
-          `当前时间不足：计划约需 ${detail.required_hours} 小时，现有周期可用 ${detail.available_hours} 小时。建议至少设置 ${detail.minimum_days} 天，或提高每日投入时间。`,
-        )
+        setError(t('capacityError', {
+          required: detail.required_hours,
+          available: detail.available_hours,
+          days: detail.minimum_days,
+        }))
       } else {
-        setError(err instanceof Error ? err.message : '生成失败，请重试')
+        setError(err instanceof Error ? err.message : t('genericError'))
       }
     } finally {
       setLoading(false)
@@ -95,39 +99,39 @@ export function GoalInput() {
         <header className="hero">
           <div className="date-hero">
             {`${today.slice(0, 4)} / ${today.slice(5, 7)} / ${today.slice(8, 10)}`}
-            <span> · 今天</span>
+            <span> · {t('today')}</span>
           </div>
-          <p className="eyebrow">目标 → 每日日程</p>
-          <h1 className="hero-title" style={{ marginTop: 10 }}>把一个目标，变成每天的日程</h1>
-          <p className="hero-sub">AI 会把它拆成里程碑和每日任务，并排出可以执行的日期。</p>
+          <p className="eyebrow">{t('homeEyebrow')}</p>
+          <h1 className="hero-title" style={{ marginTop: 10 }}>{t('homeTitle')}</h1>
+          <p className="hero-sub">{t('homeSub')}</p>
         </header>
 
         <form className="card form-card" onSubmit={onSubmit} noValidate>
           <div className="field">
-            <label htmlFor="goal-title" className="field-label">目标标题 *</label>
+            <label htmlFor="goal-title" className="field-label">{t('goalTitle')}</label>
             <input
               id="goal-title"
               className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="例如：3个月从零学会Python编程"
+              placeholder={t('goalTitlePlaceholder')}
               autoFocus
             />
           </div>
 
           <div className="field">
-            <label htmlFor="goal-desc" className="field-label">补充说明（可选）</label>
+            <label htmlFor="goal-desc" className="field-label">{t('goalDesc')}</label>
             <textarea
               id="goal-desc"
               className="input"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="想达到什么程度？有什么约束？"
+              placeholder={t('goalDescPlaceholder')}
             />
           </div>
 
           <div className="field">
-            <label htmlFor="duration-value" className="field-label">预期完成时间</label>
+            <label htmlFor="duration-value" className="field-label">{t('durationLabel')}</label>
             <div className="duration-row">
               <input
                 id="duration-value"
@@ -144,19 +148,19 @@ export function GoalInput() {
                   setDurationError('')
                 }}
               />
-              <label className="sr-only" htmlFor="duration-unit">时间单位</label>
+              <label className="sr-only" htmlFor="duration-unit">{t('timeUnit')}</label>
               <select
                 id="duration-unit"
                 className="input"
                 value={durationUnit}
                 onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
               >
-                <option value="day">天</option>
-                <option value="week">周</option>
-                <option value="month">月</option>
+                <option value="day">{t('unitDay')}</option>
+                <option value="week">{t('unitWeek')}</option>
+                <option value="month">{t('unitMonth')}</option>
               </select>
             </div>
-            <p className="field-help">任务会从今天起（包含周末）均匀安排在这段时间内。</p>
+            <p className="field-help">{t('durationHelp')}</p>
             {durationError && (
               <p id="duration-error" role="alert" className="error-text">
                 {durationError}
@@ -165,7 +169,7 @@ export function GoalInput() {
           </div>
 
           <div className="field">
-            <label htmlFor="daily-hours" className="field-label">每日可投入时间</label>
+            <label htmlFor="daily-hours" className="field-label">{t('dailyHoursLabel')}</label>
             <input
               id="daily-hours"
               type="number"
@@ -181,7 +185,7 @@ export function GoalInput() {
                 setDailyHoursError('')
               }}
             />
-            <p className="field-help">单位：小时，支持 0.5 的倍数。</p>
+            <p className="field-help">{t('dailyHoursHelp')}</p>
             {dailyHoursError && (
               <p id="daily-hours-error" role="alert" className="error-text">
                 {dailyHoursError}
@@ -192,7 +196,7 @@ export function GoalInput() {
           {error && <p role="alert" className="error-text">{error}</p>}
 
           <button className="btn btn-block" disabled={loading}>
-            {loading ? 'AI 正在拆解计划…' : '生成计划'}
+            {loading ? t('generating') : t('generate')}
           </button>
         </form>
 
@@ -203,7 +207,7 @@ export function GoalInput() {
               await api.deleteGoal(id)
               void loadGoals()
             } catch (e) {
-              setError(e instanceof Error ? e.message : '删除失败')
+              setError(e instanceof Error ? e.message : t('deleteFailed'))
             }
           }}
         />

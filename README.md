@@ -19,6 +19,7 @@ Turn a vague goal into a concrete daily plan. PlanAgent uses an LLM to break you
 - **Verification**: learning tasks get a fresh 10-question quiz (70/100 to pass); practice/project tasks go through a delivery review. History is stored.
 - **Task-scoped AI tutor**: persistent adaptive conversation (diagnose → explain → practice → remediate → ready), streaming replies, and switchable models.
 - **Local-first**: single-user mode by default, no sign-in required; data lives in a local `planagent.db`.
+- **English / 中文 UI**: switch language from the top bar at any time; the choice is remembered.
 - **Bring your own LLM**: switch between DeepSeek, OpenAI, Claude, and local Ollama from the first-run setup wizard.
 - **Packaged desktop apps**: Windows and macOS builds published automatically from GitHub Actions.
 
@@ -116,6 +117,18 @@ cd frontend && npm test && npm run build
 ## Release process
 
 Push a `v*` tag (e.g. `v1.0.0`) and GitHub Actions builds Windows and macOS packages and attaches them to a GitHub Release. You can also run the **Build desktop packages** workflow manually and grab the artifacts.
+
+### Code signing (optional)
+
+Official releases are shipped unsigned, so Windows may show *Unknown publisher* and macOS may show *unidentified developer* on first launch (see the note above). The workflow will sign automatically once you configure the corresponding repository secrets:
+
+| Platform | Secrets | Method |
+| --- | --- | --- |
+| macOS | `AC_CERTIFICATE_BASE64`, `AC_P12_PASSWORD`, `APPLE_CERT_NAME` | Apple Developer certificate (`codesign`) |
+| Windows | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_KEY_VAULT_NAME`, `AZURE_CERT_NAME` | Azure Trusted Signing (`azure/actions-signed`) |
+| Windows (self-signed) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` | `.pfx` certificate + `signtool` (only reduces the *Unknown publisher* warning; it does not remove SmartScreen) |
+
+Any step whose secrets are not set is skipped automatically, so a fork with no signing credentials still produces working builds. See [SECURITY.md](SECURITY.md) for the full hardening notes.
 
 ## Roadmap
 

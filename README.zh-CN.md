@@ -18,6 +18,7 @@
 - **任务级 AI 导师**：持久化自适应对话（诊断 → 讲解 → 练习 → 补强 → ready），流式回复，可切换模型。
 - **自带 LLM 接入**：支持 DeepSeek、OpenAI、Claude 与本地 Ollama，首次运行引导页选择提供方并填写 Key。
 - **本地优先**：默认本地单用户、无需登录；数据保存在本地 `planagent.db`。
+- **中英双语界面**：顶部导航可随时切换语言，选择会被记住。
 - **多端打包**：Windows / macOS 桌面版，GitHub Actions 自动构建发布。
 
 ## 界面预览
@@ -96,6 +97,18 @@ cd frontend && npm test && npm run build
 ## 发布流程
 
 推送 `v*` 标签（例如 `v1.0.0`）后，GitHub Actions 会自动构建 Windows 与 macOS 安装包，并挂到 GitHub Releases；也可以手动触发 **Build desktop packages** 工作流，在 Artifacts 中下载。
+
+### 代码签名（可选）
+
+官方发布包默认未签名，Windows 首次运行可能提示“未知发布者”，macOS 可能提示“无法验证开发者”（处理方式见上文）。在仓库设置中配置对应的 secrets 后，构建时会自动签名；未配置的签名步骤会被自动跳过，不影响正常构建：
+
+| 平台 | 需要的 Secrets | 方式 |
+| --- | --- | --- |
+| macOS | `AC_CERTIFICATE_BASE64`、`AC_P12_PASSWORD`、`APPLE_CERT_NAME` | Apple Developer 证书（`codesign`） |
+| Windows | `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`AZURE_KEY_VAULT_NAME`、`AZURE_CERT_NAME` | Azure 受信任签名 |
+| Windows（自签名） | `WINDOWS_PFX_BASE64`、`WINDOWS_PFX_PASSWORD` | `.pfx` 证书 + `signtool`（只能减少“未知发布者”提示，无法消除 SmartScreen） |
+
+更多安全说明见 [SECURITY.md](SECURITY.md)。
 
 ## 部署（自托管）
 
