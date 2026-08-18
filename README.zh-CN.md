@@ -20,6 +20,10 @@
 - **本地优先**：默认本地单用户、无需登录；数据保存在本地 `planagent.db`。
 - **多端打包**：Windows / macOS 桌面版，GitHub Actions 自动构建发布。
 
+## 界面预览
+
+![PlanAgent 演示动画](docs/screenshots/demo.gif)
+
 ## 快速开始（下载版）
 
 1. 从 [GitHub Releases](../../releases) 下载对应平台的压缩包（`PlanAgent-v*` 标签）。

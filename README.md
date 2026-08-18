@@ -24,7 +24,9 @@ Turn a vague goal into a concrete daily plan. PlanAgent uses an LLM to break you
 
 ## Screenshots
 
-Coming soon — see [docs/screenshots](docs/screenshots) for the capture checklist and file layout.
+![PlanAgent demo](docs/screenshots/demo.gif)
+
+The animation above is a stylized walkthrough of the core flow. Real screen captures are tracked in [docs/screenshots](docs/screenshots).
 
 ## Quick start (downloaded app)
 
