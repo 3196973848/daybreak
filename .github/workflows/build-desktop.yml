@@ -19,6 +19,9 @@ jobs:
           - os: macos-latest
             artifact_suffix: macos-arm64
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -74,11 +77,21 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_KEY_VAULT_NAME: ${{ secrets.AZURE_KEY_VAULT_NAME }}
-          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
-        uses: azure/actions-signed@v2
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+        uses: azure/artifact-signing-action@v2
         with:
-          files: dist/PlanAgent.exe
+          azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
+          azure-client-id: ${{ env.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ env.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ env.AZURE_ENDPOINT }}
+          signing-account-name: ${{ env.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.AZURE_CERT_PROFILE }}
+          files: dist\PlanAgent.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Assemble release folder
         shell: bash

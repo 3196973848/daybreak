@@ -125,7 +125,7 @@ Official releases are shipped unsigned, so Windows may show *Unknown publisher* 
 | Platform | Secrets | Method |
 | --- | --- | --- |
 | macOS | `AC_CERTIFICATE_BASE64`, `AC_P12_PASSWORD`, `APPLE_CERT_NAME` | Apple Developer certificate (`codesign`) |
-| Windows | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_KEY_VAULT_NAME`, `AZURE_CERT_NAME` | Azure Trusted Signing (`azure/actions-signed`) |
+| Windows | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE` | Azure Trusted Signing (`azure/artifact-signing-action`) |
 | Windows (self-signed) | `WINDOWS_PFX_BASE64`, `WINDOWS_PFX_PASSWORD` | `.pfx` certificate + `signtool` (only reduces the *Unknown publisher* warning; it does not remove SmartScreen) |
 
 Any step whose secrets are not set is skipped automatically, so a fork with no signing credentials still produces working builds. See [SECURITY.md](SECURITY.md) for the full hardening notes.

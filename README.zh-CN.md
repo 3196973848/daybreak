@@ -105,7 +105,7 @@ cd frontend && npm test && npm run build
 | 平台 | 需要的 Secrets | 方式 |
 | --- | --- | --- |
 | macOS | `AC_CERTIFICATE_BASE64`、`AC_P12_PASSWORD`、`APPLE_CERT_NAME` | Apple Developer 证书（`codesign`） |
-| Windows | `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`AZURE_KEY_VAULT_NAME`、`AZURE_CERT_NAME` | Azure 受信任签名 |
+| Windows | `AZURE_TENANT_ID`、`AZURE_CLIENT_ID`、`AZURE_CLIENT_SECRET`、`AZURE_ENDPOINT`、`AZURE_SIGNING_ACCOUNT`、`AZURE_CERT_PROFILE` | Azure 受信任签名 |
 | Windows（自签名） | `WINDOWS_PFX_BASE64`、`WINDOWS_PFX_PASSWORD` | `.pfx` 证书 + `signtool`（只能减少“未知发布者”提示，无法消除 SmartScreen） |
 
 更多安全说明见 [SECURITY.md](SECURITY.md)。
