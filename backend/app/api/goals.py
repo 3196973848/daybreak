@@ -148,7 +148,7 @@ def export_calendar(
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//PlanAgent//PlanAgent//ZH-CN",
+        "PRODID:-//Daybreak//Daybreak//ZH-CN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]

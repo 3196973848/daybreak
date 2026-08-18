@@ -59,7 +59,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="PlanAgent",
+    name="Daybreak",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

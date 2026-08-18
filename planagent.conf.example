@@ -1,5 +1,5 @@
 # 本地桌面版配置
-# 使用方法：把本文件改名为 planagent.conf，与 PlanAgent.exe 放在同一目录
+# 使用方法：把本文件改名为 planagent.conf，与 Daybreak.exe 放在同一目录
 
 # DeepSeek API Key（AI 计划生成与导师功能需要，必填）
 PLANAGENT_LLM_API_KEY=

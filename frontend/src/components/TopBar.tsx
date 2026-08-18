@@ -16,7 +16,7 @@ export function TopBar({
         <span className="brand-mark">
           <IconTarget size={16} />
         </span>
-        <span>PlanAgent</span>
+        <span>Daybreak</span>
       </Link>
       {title && <span className="topbar-title">{title}</span>}
       <div className="topbar-spacer" />

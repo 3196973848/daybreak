@@ -14,9 +14,9 @@ export const dict: Record<string, [string, string]> = {
   close: ['关闭', 'Close'],
   cancel: ['取消', 'Cancel'],
 
-  homeEyebrow: ['目标 → 每日日程', 'Goal → daily plan'],
-  homeTitle: ['把一个目标，变成每天的日程', 'Turn a goal into a daily plan'],
-  homeSub: ['AI 会把它拆成里程碑和每日任务，并排出可以执行的日期。', 'AI breaks it into milestones and daily tasks with executable dates.'],
+  homeEyebrow: ['停止空想 · 开始行动', 'Stop dreaming · Start doing'],
+  homeTitle: ['把模糊的愿景，变成每一天的行动', 'Turn vague visions into daily actions'],
+  homeSub: ['AI 帮你把大目标拆成里程碑和每日任务，排出具体日程——不用再纠结从哪开始，每天都有下一步可做。', 'AI breaks your big goals into milestones and a day-by-day schedule — stop wondering where to start, every day has a concrete next step.'],
   today: ['今天', 'today'],
   goalTitle: ['目标标题 *', 'Goal title *'],
   goalTitlePlaceholder: ['例如：3个月从零学会Python编程', 'e.g. Learn Python in 3 months'],

@@ -37,17 +37,17 @@ describe('GoalInput language switching', () => {
       </I18nProvider>,
     )
 
-    expect(screen.getByRole('heading', { name: '把一个目标，变成每天的日程' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '把模糊的愿景，变成每一天的行动' })).toBeTruthy()
     expect(screen.getByLabelText('目标标题 *')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'English' }))
 
-    expect(screen.getByRole('heading', { name: 'Turn a goal into a daily plan' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Turn vague visions into daily actions' })).toBeTruthy()
     expect(screen.getByLabelText('Goal title *')).toBeTruthy()
     expect(localStorage.getItem('planagent_lang')).toBe('en')
 
     await user.click(screen.getByRole('button', { name: '中文' }))
 
-    expect(screen.getByRole('heading', { name: '把一个目标，变成每天的日程' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '把模糊的愿景，变成每一天的行动' })).toBeTruthy()
   })
 })

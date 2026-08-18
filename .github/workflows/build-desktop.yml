@@ -50,7 +50,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pyinstaller
 
-      - name: Package PlanAgent
+      - name: Package Daybreak
         run: |
           python -m PyInstaller planagent.spec --noconfirm
 
@@ -69,7 +69,7 @@ jobs:
           security import /tmp/cert.p12 -P "$AC_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_NAME"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$AC_P12_PASSWORD" "$KEYCHAIN_NAME"
           security list-keychains -d user -s "$KEYCHAIN_NAME"
-          codesign --force --options runtime --timestamp --deep -s "$APPLE_CERT_NAME" dist/PlanAgent
+          codesign --force --options runtime --timestamp --deep -s "$APPLE_CERT_NAME" dist/Daybreak
 
       - name: Sign Windows executable (optional)
         if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
@@ -88,7 +88,7 @@ jobs:
           endpoint: ${{ env.AZURE_ENDPOINT }}
           signing-account-name: ${{ env.AZURE_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ env.AZURE_CERT_PROFILE }}
-          files: dist\PlanAgent.exe
+          files: dist\Daybreak.exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -96,18 +96,18 @@ jobs:
       - name: Assemble release folder
         shell: bash
         run: |
-          dest="release/planagent-${{ matrix.artifact_suffix }}"
+          dest="release/daybreak-${{ matrix.artifact_suffix }}"
           mkdir -p "$dest"
-          cp dist/PlanAgent* "$dest/"
+          cp dist/Daybreak* "$dest/"
           cp planagent.conf.example "$dest/planagent.conf"
           cat > "$dest/使用说明.txt" <<'EOF'
-          PlanAgent 本地版使用说明
+          Daybreak 本地版使用说明
 
-          1. 把 PlanAgent（Windows 为 PlanAgent.exe）和 planagent.conf 放在同一个文件夹。
+          1. 把 Daybreak（Windows 为 Daybreak.exe）和 planagent.conf 放在同一个文件夹。
           2. 用文本编辑器打开 planagent.conf，在 PLANAGENT_LLM_API_KEY= 后面填上你自己的
              DeepSeek API Key（到 https://platform.deepseek.com 获取），保存。
           3. 双击运行。macOS 若提示无法验证开发者：右键点击 → 打开，或在终端执行
-             xattr -dr com.apple.quarantine PlanAgent
+             xattr -dr com.apple.quarantine Daybreak
           4. 你的数据保存在同目录的 planagent.db；想备份直接复制这个文件即可。
           EOF
 
@@ -126,7 +126,7 @@ jobs:
           $store.Close()
           $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter 'signtool.exe' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1
           if (-not $signtool) { throw 'signtool.exe not found' }
-          Get-ChildItem -Path dist -Filter 'PlanAgent*' | ForEach-Object {
+          Get-ChildItem -Path dist -Filter 'Daybreak*' | ForEach-Object {
             & $signtool.FullName sign /f "$env:RUNNER_TEMP\code-sign.pfx" /p $env:WINDOWS_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
@@ -135,12 +135,12 @@ jobs:
         shell: bash
         run: |
           cd release
-          python -m zipfile -c "PlanAgent-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip" "planagent-${{ matrix.artifact_suffix }}"
+          python -m zipfile -c "Daybreak-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip" "daybreak-${{ matrix.artifact_suffix }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PlanAgent-${{ matrix.artifact_suffix }}
-          path: release/PlanAgent-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip
+          name: Daybreak-${{ matrix.artifact_suffix }}
+          path: release/Daybreak-${{ github.ref_name }}-${{ matrix.artifact_suffix }}.zip
           if-no-files-found: error
 
   release:

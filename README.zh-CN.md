@@ -1,8 +1,12 @@
 > English: [README](README.md)
 
-# PlanAgent
+# Daybreak
 
-目标驱动的规划 Web 应用：输入一个目标，AI 拆解成里程碑和每日任务，排程算法排出日程，支持勾选完成与「去检验」验证，并内置任务级 AI 导师。
+**停止空想，开始行动。**
+
+Daybreak 是帮你把大愿景变成每日行动的 AI 伙伴。大多数人缺的从来不是想法，而是「从哪开始」：目标太模糊不敢动，计划写了又放下，周而复始。Daybreak 会把任何一个再模糊的愿景，在几分钟内变成一份可以照着做的每日日程——你不再花几个小时、几天去规划，而是把精力留给行动本身。
+
+它适合每一个有想法、有追求、却不想在原地打转的人。学一门语言、做一个产品、健身、写书……告诉 Daybreak 你的目标，它会拆成里程碑、把任务排到你的日历上、检验你真正学会了什么，并在卡住的时候陪你往下走。每一天都有下一步，每一步都让愿景更接近现实。
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg)
@@ -10,30 +14,31 @@
 
 ## 功能特性
 
-- **目标 → 计划**：LLM 把模糊目标拆成里程碑与每日任务，确定性算法排出日期。
+- **愿景 → 每日行动**：一句话写下你的大目标，Daybreak 帮你拆成里程碑和每日日程，不再面对一片空白的日历发呆。
+- **几分钟，而不是几天**：原本要思考几个小时的规划，几秒生成——少规划，多行动。
 - **时长排程**：按天/周/月设定完成时长，任务均匀铺满整个周期（含周末）；容量不足时给出最短建议。
 - **每日执行**：日历视图、任务勾选、类型与耗时标记、检验入口。
 - **日历导出**：把计划导出为 iCal 文件，可导入系统日历。
 - **任务检验**：学习任务实时出 10 题（70 分通过），实操/项目走交付评审；检验历史存档。
 - **任务级 AI 导师**：持久化自适应对话（诊断 → 讲解 → 练习 → 补强 → ready），流式回复，可切换模型。
 - **自带 LLM 接入**：支持 DeepSeek、OpenAI、Claude 与本地 Ollama，首次运行引导页选择提供方并填写 Key。
-- **本地优先**：默认本地单用户、无需登录；数据保存在本地 `planagent.db`。
+- **本地优先**：数据只存在你自己电脑上，无需登录、无需云账号。
 - **中英双语界面**：顶部导航可随时切换语言，选择会被记住。
 - **多端打包**：Windows / macOS 桌面版，GitHub Actions 自动构建发布。
 
 ## 界面预览
 
-![PlanAgent 演示动画](docs/screenshots/demo.gif)
+![Daybreak 演示动画](docs/screenshots/demo.gif)
 
 ## 快速开始（下载版）
 
-1. 从 [GitHub Releases](../../releases) 下载对应平台的压缩包（`PlanAgent-v*` 标签）。
-2. 双击运行（Windows：`PlanAgent.exe`；macOS：`PlanAgent`）。首次启动会进入引导页，选择提供方（DeepSeek / OpenAI / Claude / Ollama）并填写 API Key。
+1. 从 [GitHub Releases](../../releases) 下载对应平台的压缩包（`Daybreak-v*` 标签）。
+2. 双击运行（Windows：`Daybreak.exe`；macOS：`Daybreak`）。首次启动会进入引导页，选择提供方（DeepSeek / OpenAI / Claude / Ollama）并填写 API Key。
 3. 保存后即可开始规划，浏览器自动打开、无需登录。
 
 数据保存在程序同目录的 `planagent.db`，备份时复制该文件即可。引导页会把提供方与 Key 写回 `planagent.conf`。
 
-> macOS 首次打开若提示无法验证开发者：右键点击 → 打开，或执行 `xattr -dr com.apple.quarantine PlanAgent`。
+> macOS 首次打开若提示无法验证开发者：右键点击 → 打开，或执行 `xattr -dr com.apple.quarantine Daybreak`。
 
 ## 从源码运行（开发）
 
@@ -132,7 +137,7 @@ docker compose up -d --build
 ## 目录结构
 
 ```text
-planagent/
+daybreak/
 ├── backend/            FastAPI 后端（LLM、排程、服务、API、测试）
 ├── frontend/           React + Vite 前端
 ├── docs/               设计与实施文档

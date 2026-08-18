@@ -1,6 +1,6 @@
 # 安全说明
 
-PlanAgent 依赖用户自己配置的 DeepSeek API Key。请勿把 API Key 提交到仓库、写进日志或在公开渠道分享。
+Daybreak 依赖用户自己配置的 DeepSeek API Key。请勿把 API Key 提交到仓库、写进日志或在公开渠道分享。
 
 如果发现安全漏洞，请不要公开讨论，先通过私有渠道联系维护者；在修复发布前避免透露细节。
 
