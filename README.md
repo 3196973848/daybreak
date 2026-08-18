@@ -30,9 +30,19 @@ It's built for people with ideas and ambition who are tired of spinning in place
 
 ## Screenshots
 
+The demo animation below is a stylized walkthrough of the core flow.
+
 ![Daybreak demo](docs/screenshots/demo.gif)
 
-The animation above is a stylized walkthrough of the core flow. Real screen captures are tracked in [docs/screenshots](docs/screenshots).
+Real screen captures:
+
+![Screenshot 1](docs/screenshots/screen-1.png)
+
+![Screenshot 2](docs/screenshots/screen-2.png)
+
+![Screenshot 3](docs/screenshots/screen-3.png)
+
+![Screenshot 4](docs/screenshots/screen-4.png)
 
 ## Quick start (downloaded app)
 

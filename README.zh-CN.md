@@ -28,7 +28,19 @@ Daybreak 是帮你把大愿景变成每日行动的 AI 伙伴。大多数人缺�
 
 ## 界面预览
 
+演示动画（核心流程走查）：
+
 ![Daybreak 演示动画](docs/screenshots/demo.gif)
+
+真实界面截图：
+
+![截图 1](docs/screenshots/screen-1.png)
+
+![截图 2](docs/screenshots/screen-2.png)
+
+![截图 3](docs/screenshots/screen-3.png)
+
+![截图 4](docs/screenshots/screen-4.png)
 
 ## 快速开始（下载版）
 
