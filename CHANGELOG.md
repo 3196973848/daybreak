@@ -2,6 +2,13 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- 英文界面：顶部导航一键切换中英文，选择会被记住；所有页面文案均已翻译。
+- 可选代码签名：配置签名 secrets 后，构建工作流会自动对 Windows / macOS 安装包签名；未配置时自动跳过，不影响发布。
+
 ## [1.0.2] - 2026-08-17
 
 首个对外发布版本（`v1.0.0` / `v1.0.1` 为内部占位标签、未产出安装包，已清理）。
