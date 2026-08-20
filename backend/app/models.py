@@ -1,19 +1,67 @@
+import json
+import secrets
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+
+def _generate_feed_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    goals: Mapped[list["Goal"]] = relationship(back_populates="owner")
 
 
 class Goal(Base):
     __tablename__ = "goals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    feed_token: Mapped[str] = mapped_column(String(64), default=_generate_feed_token, unique=True)
+    leave_dates: Mapped[str] = mapped_column(Text, default="[]")  # JSON array of date strings
+
+    def get_leave_dates(self) -> set[date]:
+        try:
+            return {date.fromisoformat(d) for d in json.loads(self.leave_dates) if d}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return set()
+
+    def add_leave_date(self, d: date) -> None:
+        leaves = self.get_leave_dates()
+        leaves.add(d)
+        self.leave_dates = json.dumps([ld.isoformat() for ld in sorted(leaves)])
+
+    def remove_leave_date(self, d: date) -> None:
+        leaves = self.get_leave_dates()
+        leaves.discard(d)
+        self.leave_dates = json.dumps([ld.isoformat() for ld in sorted(leaves)])
+    owner: Mapped[User | None] = relationship(back_populates="goals")
     plan: Mapped["Plan"] = relationship(
         back_populates="goal", uselist=False, cascade="all, delete-orphan"
     )
@@ -59,6 +107,7 @@ class Task(Base):
     type: Mapped[str] = mapped_column(String(20), default="learn")
     scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     effort: Mapped[float] = mapped_column(Float, default=1.0)
+    actual_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     order: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="todo")
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -67,6 +116,48 @@ class Task(Base):
     verifications: Mapped[list["VerificationRecord"]] = relationship(
         back_populates="task", cascade="all, delete-orphan"
     )
+    learning_session: Mapped["LearningSession"] = relationship(
+        back_populates="task", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class LearningSession(Base):
+    __tablename__ = "learning_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), unique=True)
+    stage: Mapped[str] = mapped_column(String(20), default="diagnose")
+    session_summary: Mapped[str] = mapped_column(Text, default="")
+    covered_points: Mapped[str] = mapped_column(Text, default="[]")
+    weak_points: Mapped[str] = mapped_column(Text, default="[]")
+    ready_for_verification: Mapped[bool] = mapped_column(Boolean, default=False)
+    estimated_hours_snapshot: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, onupdate=datetime.now
+    )
+    task: Mapped["Task"] = relationship(back_populates="learning_session")
+    turns: Mapped[list["LearningTurn"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="LearningTurn.id",
+    )
+
+
+class LearningTurn(Base):
+    __tablename__ = "learning_turns"
+    __table_args__ = (
+        UniqueConstraint("session_id", "client_turn_id", name="uq_learning_turn_client"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("learning_sessions.id"))
+    client_turn_id: Mapped[str] = mapped_column(String(64))
+    user_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assistant_message: Mapped[str] = mapped_column(Text)
+    stage: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    session: Mapped[LearningSession] = relationship(back_populates="turns")
 
 
 class VerificationRecord(Base):

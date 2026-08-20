@@ -1,24 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { GoalDTO, TaskDTO } from '../types'
 import { Calendar } from '../components/Calendar'
 import { VerificationModal } from '../components/VerificationModal'
 import { TopBar } from '../components/TopBar'
+import { useI18n } from '../i18n'
 import { IconCheck, IconClipboard } from '../components/icons'
 import { todayLocal } from '../utils/date'
 
-const TYPE_TEXT: Record<string, string> = { learn: '学习', practice: '实操', project: '项目' }
+const TYPE_KEY: Record<string, string> = { learn: 'typeLearn', practice: 'typePractice', project: 'typeProject' }
 
 function toKey(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : '未排期'
+  return iso ? iso.slice(0, 10) : 'none'
 }
 
 export function DailyTasks() {
   const { id } = useParams()
+  const { t } = useI18n()
   const [goal, setGoal] = useState<GoalDTO | null>(null)
   const [selected, setSelected] = useState(todayLocal)
   const [verifyTask, setVerifyTask] = useState<TaskDTO | null>(null)
+  const [learningStates, setLearningStates] = useState<Record<number, boolean>>({})
+  const checkedLearning = useRef<Set<number>>(new Set())
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -27,14 +31,38 @@ export function DailyTasks() {
   }, [id])
 
   const tasks = useMemo(() => (goal?.plan ? goal.plan.milestones.flatMap((m) => m.tasks) : []), [goal])
+
+  useEffect(() => {
+    let active = true
+    for (const task of tasks) {
+      if (task.type !== 'learn' || checkedLearning.current.has(task.id)) continue
+      checkedLearning.current.add(task.id)
+      api.getLearningSession(task.id)
+        .then(() => {
+          if (active) setLearningStates((states) => ({ ...states, [task.id]: true }))
+        })
+        .catch(() => {
+          if (active) setLearningStates((states) => ({ ...states, [task.id]: false }))
+        })
+    }
+    return () => {
+      active = false
+    }
+  }, [tasks])
+
   const datesWithTasks = useMemo(
     () => new Set(tasks.map((t) => toKey(t.scheduled_date))),
     [tasks],
+  )
+  const leaveDates = useMemo(
+    () => new Set(goal?.leave_dates || []),
+    [goal],
   )
   const dayTasks = useMemo(
     () => tasks.filter((t) => toKey(t.scheduled_date) === selected).sort((a, b) => a.order - b.order),
     [tasks, selected],
   )
+  const isLeaveDay = leaveDates.has(selected)
 
   async function toggle(task: TaskDTO) {
     try {
@@ -50,17 +78,32 @@ export function DailyTasks() {
         },
       } : g))
     } catch (e) {
+      setError(e instanceof Error ? e.message : t('actionFailed'))
+    }
+  }
+
+  async function toggleLeave() {
+    if (!goal) return
+    try {
+      let updated: GoalDTO
+      if (isLeaveDay) {
+        updated = await api.removeLeave(goal.id, selected)
+      } else {
+        updated = await api.addLeave(goal.id, selected)
+      }
+      setGoal(updated)
+    } catch (e) {
       setError(e instanceof Error ? e.message : '操作失败')
     }
   }
 
-  if (!goal) return <p className="faint">加载中…</p>
+  if (!goal) return <p className="faint">{t('loading')}</p>
   if (!goal.plan) {
     return (
       <>
         <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
         <div className="page page-narrow">
-          <p className="error-text">此目标未生成计划。</p>
+          <p className="error-text">{t('noPlan')}</p>
         </div>
       </>
     )
@@ -70,38 +113,79 @@ export function DailyTasks() {
     <>
       <TopBar title={goal.title} backTo={`/goals/${goal.id}`} />
       <div className="page">
-        <h1 style={{ fontSize: 22, margin: '0 0 4px' }}>{goal.title}</h1>
-        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
+        <header className="page-head">
+          <div>
+            <p className="eyebrow">{t('dailyEyebrow')}</p>
+            <h1 className="page-title">{goal.title}</h1>
+          </div>
+        </header>
+        {error && <p className="error-text" style={{ marginBottom: 12 }}>{error}</p>}
 
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginTop: 16, flexWrap: 'wrap' }}>
-          <div className="card" style={{ padding: 16, flex: 1, minWidth: 300 }}>
-            <div style={{ textAlign: 'center', marginBottom: 12 }}>
-              <div style={{ fontWeight: 600 }}>{selected}</div>
-              <div className="faint" style={{ fontSize: 12 }}>点击任务左侧圆点可勾选完成</div>
+        <div className="daily-layout">
+          <div className="card daily-list">
+            <div className="daily-list-head">
+              <div className="daily-date">
+                {selected} · {weekdayLabel(t, selected)}
+                {isLeaveDay && <span style={{ marginLeft: 8, color: 'var(--danger)', fontSize: 12 }}>· 请假</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {(dayTasks.length > 0 || isLeaveDay) && (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={toggleLeave}
+                    style={{
+                      fontSize: 12,
+                      color: isLeaveDay ? 'var(--text-dim)' : 'var(--danger)',
+                    }}
+                  >
+                    {isLeaveDay ? '取消请假' : '请假'}
+                  </button>
+                )}
+                {dayTasks.length > 0 && <div className="daily-hint">{t('clickToComplete')}</div>}
+              </div>
             </div>
-            {dayTasks.length === 0 && <p className="faint" style={{ textAlign: 'center' }}>这一天没有任务</p>}
-            {dayTasks.map((t) => (
-              <div key={t.id} className="card row-hover" style={{ padding: '10px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+
+            {isLeaveDay && dayTasks.length === 0 && (
+              <div className="empty" style={{ color: 'var(--text-faint)' }}>
+                这天已请假，任务已自动后延
+              </div>
+            )}
+
+            {!isLeaveDay && dayTasks.length === 0 && (
+              <div className="empty">{t('noTasksDay')}</div>
+            )}
+
+            {dayTasks.map((task) => (
+              <div key={task.id} className="card row-hover task-card">
                 <button
-                  className={`circle-dot ${t.status === 'done' ? 'done' : ''}`}
-                  onClick={() => void toggle(t)}
-                  aria-label={t.status === 'done' ? '标记未完成' : '标记完成'}
+                  type="button"
+                  className={`circle-dot ${task.status === 'done' ? 'done' : ''}`}
+                  onClick={() => void toggle(task)}
+                  aria-label={task.status === 'done' ? t('markUndone') : t('markDone')}
                 >
-                  {t.status === 'done' && <IconCheck size={12} />}
+                  {task.status === 'done' && <IconCheck size={13} />}
                 </button>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--text-faint)' : 'var(--text)' }}>
-                    {t.title}
-                  </div>
-                  <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
-                    {TYPE_TEXT[t.type] ?? t.type} · 约 {t.effort} 小时
-                    {t.verified ? ' · 已验证' : ''}
+
+                <div className="task-main">
+                  <div className={`task-name ${task.status === 'done' ? 'done' : ''}`}>{task.title}</div>
+                  <div className="task-meta">
+                    <span className="task-type">{t(TYPE_KEY[task.type] ?? task.type)}</span>
+                    <span>{t('hoursShort', { n: task.effort })}</span>
+                    {task.verified && <span className="verified">{t('verified')}</span>}
                   </div>
                 </div>
-                <button className="btn-ghost" onClick={() => setVerifyTask(t)}>
+
+                <button className="btn-ghost" onClick={() => setVerifyTask(task)}>
                   <IconClipboard size={14} />
-                  检验
+                  {t('verify')}
                 </button>
+
+                {task.type === 'learn' && (
+                  <Link to={`/tasks/${task.id}/learn`} className="btn-ghost">
+                    {learningStates[task.id] ? t('continueLearning') : t('startLearning')}
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -127,4 +211,11 @@ export function DailyTasks() {
       </div>
     </>
   )
+}
+
+function weekdayLabel(t: (key: string) => string, iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  const keys = ['weekSun', 'weekMon', 'weekTue', 'weekWed', 'weekThu', 'weekFri', 'weekSat']
+  return t(keys[d.getDay()])
 }

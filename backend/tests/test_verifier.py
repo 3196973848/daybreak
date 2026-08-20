@@ -1,11 +1,18 @@
+import json
+
+import pytest
+from pydantic import ValidationError
+
 from app.llm.verifier import (
     DeliverContent,
     GradeResult,
+    ShortGradeResult,
     TestContent,
     generate_deliver_criteria,
     generate_test,
     grade_delivery,
-    grade_test,
+    grade_short_answers,
+    score_test,
 )
 
 
@@ -32,19 +39,211 @@ class FakeClient:
         self.chat = type("Chat", (), {"completions": FakeCompletions(value.model_dump_json())})()
 
 
-def test_generate_test():
-    content = TestContent(questions=[
-        {"id": 1, "type": "choice", "text": "哪个是变量名?", "options": ["a", "b"]},
-        {"id": 2, "type": "short", "text": "什么是赋值?", "options": []},
+def quiz_payload(prefix="题"):
+    questions = [
+        {
+            "id": i,
+            "type": "choice",
+            "text": f"{prefix}{i}",
+            "options": ["A", "B", "C", "D"],
+            "correct_answer": "A",
+            "reference_answer": None,
+            "rubric_points": [],
+        }
+        for i in range(1, 8)
+    ]
+    questions.extend(
+        {
+            "id": i,
+            "type": "short",
+            "text": f"{prefix}{i}",
+            "options": [],
+            "correct_answer": None,
+            "reference_answer": f"参考{i}",
+            "rubric_points": ["要点一", "要点二"],
+        }
+        for i in range(8, 11)
+    )
+    return {"questions": questions}
+
+
+class SequentialCompletions:
+    def __init__(self, payloads):
+        self.payloads = list(payloads)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        content = json.dumps(self.payloads.pop(0), ensure_ascii=False)
+        return type("Resp", (), {"choices": [FakeChoice(content)]})()
+
+
+class SequentialClient:
+    def __init__(self, payloads):
+        self.completions = SequentialCompletions(payloads)
+        self.chat = type("Chat", (), {"completions": self.completions})()
+
+
+def test_generate_test_requires_seven_choice_then_three_short_questions():
+    client = SequentialClient([quiz_payload()])
+    content = generate_test("任务", "内容", client=client)
+    assert len(content.questions) == 10
+    assert [q.type for q in content.questions] == ["choice"] * 7 + ["short"] * 3
+    assert [q.id for q in content.questions] == list(range(1, 11))
+
+
+def test_public_quiz_does_not_expose_answers_or_rubrics():
+    content = TestContent.model_validate(quiz_payload())
+    public = content.public_dump()
+    encoded = json.dumps(public, ensure_ascii=False)
+    assert "correct_answer" not in encoded
+    assert "reference_answer" not in encoded
+    assert "rubric_points" not in encoded
+    assert len(public["questions"]) == 10
+
+
+def test_generate_test_retries_invalid_shape_and_duplicate_history():
+    invalid = quiz_payload("无效")
+    invalid["questions"] = invalid["questions"][:9]
+    duplicate = quiz_payload("旧题")
+    fresh = quiz_payload("新题")
+    client = SequentialClient([invalid, duplicate, fresh])
+    result = generate_test(
+        "任务", "内容", previous_question_texts=[f"旧题{i}" for i in range(1, 11)], client=client
+    )
+    assert result.questions[0].text == "新题1"
+    assert len(client.completions.calls) == 3
+
+
+def test_generate_test_fails_after_three_invalid_attempts():
+    invalid = {"questions": []}
+    client = SequentialClient([invalid, invalid, invalid])
+    with pytest.raises(RuntimeError, match="生成 10 道检验题失败"):
+        generate_test("任务", "内容", client=client)
+
+
+def test_test_content_rejects_invalid_private_question_fields():
+    payload = quiz_payload()
+    payload["questions"][0]["correct_answer"] = "Z"
+    with pytest.raises(ValidationError):
+        TestContent.model_validate(payload)
+
+
+def test_score_test_combines_seven_exact_choices_and_three_short_scores():
+    content = TestContent.model_validate(quiz_payload())
+    answers = {str(i): "A" for i in range(1, 8)} | {"8": "answer", "9": "answer", "10": "answer"}
+    short = ShortGradeResult(items=[
+        {"id": 8, "score": 10, "feedback": "complete"},
+        {"id": 9, "score": 5, "feedback": "partly correct"},
+        {"id": 10, "score": 0, "feedback": "not answered"},
     ])
-    got = generate_test("任务", "内容", client=FakeClient(content))
-    assert got.questions[0].type == "choice"
+    result = score_test(content, answers, short)
+    assert result.points == 85
+    assert result.score == 0.85
+    assert result.details[0].correct is True
+    assert result.details[0].correct_answer == "A"
+    assert result.details[7].points == 10
 
 
-def test_grade_test_passed_threshold():
-    grade = GradeResult(score=0.9, feedback="很好")
-    got = grade_test("任务", "内容", TestContent(questions=[]), {"1": "a"}, client=FakeClient(grade))
-    assert got.score >= 0.7
+def test_score_test_gives_zero_for_missing_or_wrong_choice_answers():
+    content = TestContent.model_validate(quiz_payload())
+    short = ShortGradeResult(items=[
+        {"id": 8, "score": 0, "feedback": ""},
+        {"id": 9, "score": 0, "feedback": ""},
+        {"id": 10, "score": 0, "feedback": ""},
+    ])
+    result = score_test(content, {"1": "B"}, short)
+    assert result.points == 0
+    assert result.details[0].correct is False
+    assert result.details[1].points == 0
+
+
+def test_short_grade_requires_exact_short_question_ids():
+    with pytest.raises(ValidationError):
+        ShortGradeResult(items=[{"id": 8, "score": 10, "feedback": "x"}])
+
+
+def test_short_grade_rejects_scores_outside_zero_to_ten():
+    with pytest.raises(ValidationError):
+        ShortGradeResult(items=[
+            {"id": 8, "score": 11, "feedback": "x"},
+            {"id": 9, "score": 0, "feedback": "x"},
+            {"id": 10, "score": 0, "feedback": "x"},
+        ])
+
+
+def test_grade_short_answers_sends_only_short_questions_to_llm():
+    grade = ShortGradeResult(items=[
+        {"id": 8, "score": 10, "feedback": "x"},
+        {"id": 9, "score": 5, "feedback": "y"},
+        {"id": 10, "score": 0, "feedback": "z"},
+    ])
+    client = SequentialClient([grade.model_dump()])
+    got = grade_short_answers(
+        "task", "description", TestContent.model_validate(quiz_payload()),
+        {"1": "B", "8": "short 8", "9": "short 9", "10": "short 10"}, client=client,
+    )
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    short_questions = json.loads(user_prompt)["简答题"]
+    assert [item.id for item in got.items] == [8, 9, 10]
+    assert [item["id"] for item in short_questions] == [8, 9, 10]
+    assert [item["user_answer"] for item in short_questions] == ["short 8", "short 9", "short 10"]
+
+
+def test_grade_short_answers_omits_blank_answers_and_preserves_zero_detail_rows():
+    partial_grade = {
+        "items": [{"id": 9, "score": 7, "feedback": "partly correct"}],
+    }
+    client = SequentialClient([partial_grade, partial_grade, partial_grade])
+
+    got = grade_short_answers(
+        "task",
+        "description",
+        TestContent.model_validate(quiz_payload()),
+        {"8": "", "9": "substantive answer", "10": "  \t"},
+        client=client,
+    )
+
+    user_prompt = client.completions.calls[0]["messages"][1]["content"]
+    sent_questions = json.loads(user_prompt)["简答题"]
+    assert [question["id"] for question in sent_questions] == [9]
+    assert [(item.id, item.score) for item in got.items] == [(8, 0), (9, 7), (10, 0)]
+    assert len(client.completions.calls) == 1
+
+
+def test_grade_short_answers_skips_model_when_all_short_answers_are_blank():
+    client = SequentialClient([{
+        "items": [
+            {"id": 8, "score": 10, "feedback": "x"},
+            {"id": 9, "score": 10, "feedback": "y"},
+            {"id": 10, "score": 10, "feedback": "z"},
+        ],
+    }])
+
+    got = grade_short_answers(
+        "task",
+        "description",
+        TestContent.model_validate(quiz_payload()),
+        {"8": "", "9": "  ", "10": "\n"},
+        client=client,
+    )
+
+    assert [(item.id, item.score) for item in got.items] == [(8, 0), (9, 0), (10, 0)]
+    assert client.completions.calls == []
+
+
+def test_grade_short_answers_fails_after_three_invalid_results():
+    invalid = {"items": [{"id": 8, "score": 10, "feedback": "x"}]}
+    client = SequentialClient([invalid, invalid, invalid])
+    with pytest.raises(RuntimeError):
+        grade_short_answers(
+            "task",
+            "description",
+            TestContent.model_validate(quiz_payload()),
+            {"8": "answer", "9": "answer", "10": "answer"},
+            client=client,
+        )
+    assert len(client.completions.calls) == 3
 
 
 def test_generate_deliver_criteria():

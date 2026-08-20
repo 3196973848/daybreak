@@ -7,6 +7,7 @@ export interface TaskDTO {
   type: TaskType
   scheduled_date: string | null
   effort: number
+  actual_minutes: number | null
   order: number
   status: 'todo' | 'done'
   verified: boolean
@@ -36,7 +37,47 @@ export interface GoalDTO {
   description: string
   target_date: string | null
   created_at: string
+  feed_token?: string
+  leave_dates?: string[]
   plan?: PlanDTO
+}
+
+export interface UserDTO {
+  id: number
+  username: string
+  created_at: string
+  auth_enabled?: boolean
+}
+
+export interface ModelsDTO {
+  models: string[]
+  default: string
+}
+
+export interface ProviderDTO {
+  id: string
+  name: string
+  base_url: string
+  requires_key: boolean
+  is_custom: boolean
+  models: string[]
+}
+
+export interface SettingsDTO {
+  configured: boolean
+  has_api_key: boolean
+  provider: string
+  providers: ProviderDTO[]
+  model: string
+  models: string[]
+  requires_key: boolean
+}
+
+export interface SettingsUpdate {
+  provider: string
+  api_key?: string
+  base_url?: string
+  model?: string
 }
 
 export interface TestQuestionDTO {
@@ -61,9 +102,45 @@ export interface VerificationSubmit {
   submission?: string
 }
 
+export interface QuizQuestionResultDTO {
+  id: number
+  type: 'choice' | 'short'
+  points: number
+  correct?: boolean | null
+  correct_answer?: string | null
+  feedback: string
+}
+
 export interface VerificationResult {
   passed: boolean
   score: number
   feedback: string
   verified: boolean
+  points?: number
+  details?: QuizQuestionResultDTO[]
+}
+
+export type LearningStage = 'diagnose' | 'explain' | 'practice' | 'remediate' | 'ready'
+
+export interface LearningTurnDTO {
+  id: number
+  client_turn_id: string
+  user_message: string | null
+  assistant_message: string
+  stage: LearningStage
+  created_at: string
+}
+
+export interface LearningSessionDTO {
+  id: number
+  task_id: number
+  goal_id: number
+  task_title: string
+  task_description: string
+  stage: LearningStage
+  covered_points: string[]
+  weak_points: string[]
+  ready_for_verification: boolean
+  estimated_hours_snapshot: number
+  turns: LearningTurnDTO[]
 }

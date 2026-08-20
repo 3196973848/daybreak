@@ -1,23 +1,37 @@
-from typing import List
+from typing import List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str
     description: str = ""
-    type: str = "learn"
+    type: Literal["learn", "practice", "project"] = "learn"
     effort_hours: float = Field(default=1.0)
 
 
 class MilestoneSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str
     description: str = ""
     order: int = 0
-    target_date_offset_days: int = Field(default=7, ge=1)
     tasks: List[TaskSpec]
 
 
 class PlanSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     strategy: str = ""
+    milestones: List[MilestoneSpec]
+    assumptions: List[str] = Field(default_factory=list)
+
+
+class PreviewSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: str = ""
+    assumptions: List[str] = Field(default_factory=list)
     milestones: List[MilestoneSpec]

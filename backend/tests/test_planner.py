@@ -1,6 +1,8 @@
 import json
 
-from app.llm.planner import generate_plan
+import pytest
+
+from app.llm.planner import generate_plan, parse_plan_spec
 from app.llm.schema import MilestoneSpec, PlanSpec, TaskSpec
 
 
@@ -17,8 +19,10 @@ class FakeChoice:
 class FakeCompletions:
     def __init__(self, content):
         self._content = content
+        self.calls = []
 
     def create(self, **kwargs):
+        self.calls.append(kwargs)
         return type("Resp", (), {"choices": [FakeChoice(self._content)]})()
 
 
@@ -31,7 +35,7 @@ def test_generate_plan_returns_spec():
     spec = PlanSpec(
         strategy="策略",
         milestones=[MilestoneSpec(
-            title="里程碑1", order=1, target_date_offset_days=7,
+            title="里程碑1", order=1,
             tasks=[TaskSpec(title="任务1", type="learn", effort_hours=1.0)],
         )],
     )
@@ -41,6 +45,54 @@ def test_generate_plan_returns_spec():
     assert got.milestones[0].tasks[0].type == "learn"
 
 
+def test_generate_plan_requests_atomic_tasks_within_daily_budget_without_dates():
+    spec = PlanSpec(
+        strategy="策略",
+        milestones=[MilestoneSpec(
+            title="交易规则领域",
+            order=1,
+            tasks=[TaskSpec(
+                title="价格优先规则",
+                description="解释价格优先如何决定撮合顺序",
+                effort_hours=0.5,
+            )],
+        )],
+    )
+    client = FakeClient(spec.model_dump_json())
+
+    generate_plan("学习交易", "", "2026-09-11", daily_hours=2.5, client=client)
+
+    prompt = json.dumps(client.chat.completions.calls[0]["messages"], ensure_ascii=False)
+    assert "2.5" in prompt
+    assert "自动识别" in prompt
+    assert "具体子知识点" in prompt
+    assert "0.5" in prompt
+    assert "不要输出日期" in prompt
+
+
+def test_generate_plan_includes_validation_feedback_for_regeneration():
+    spec = PlanSpec(
+        strategy="策略",
+        milestones=[MilestoneSpec(
+            title="领域",
+            tasks=[TaskSpec(title="知识点", description="成果", effort_hours=0.5)],
+        )],
+    )
+    client = FakeClient(spec.model_dump_json())
+
+    generate_plan(
+        "学习交易",
+        "",
+        None,
+        feedback="任务耗时超过每日预算",
+        client=client,
+    )
+
+    prompt = json.dumps(client.chat.completions.calls[0]["messages"], ensure_ascii=False)
+    assert "上次计划校验失败：任务耗时超过每日预算" in prompt
+    assert "请修正后重新生成完整计划" in prompt
+
+
 def test_generate_plan_handles_invalid_json():
     client = FakeClient("这不是 JSON")
     try:
@@ -48,3 +100,39 @@ def test_generate_plan_handles_invalid_json():
         assert False, "should raise"
     except RuntimeError as exc:
         assert "JSON" in str(exc)
+
+
+@pytest.mark.parametrize(
+    "invalid_kind",
+    ["unsupported_type", "task_date", "milestone_date", "plan_date"],
+)
+def test_parse_plan_spec_rejects_unsupported_types_and_model_owned_dates(invalid_kind):
+    payload = _valid_plan_payload()
+    if invalid_kind == "unsupported_type":
+        payload["milestones"][0]["tasks"][0]["type"] = "study"
+    elif invalid_kind == "task_date":
+        payload["milestones"][0]["tasks"][0]["scheduled_date"] = "2026-08-15"
+    elif invalid_kind == "milestone_date":
+        payload["milestones"][0]["due_date"] = "2026-08-15"
+    else:
+        payload["target_date"] = "2026-08-15"
+
+    with pytest.raises(RuntimeError, match="结构"):
+        parse_plan_spec(json.dumps(payload))
+
+
+def _valid_plan_payload():
+    return PlanSpec(
+        strategy="策略",
+        milestones=[MilestoneSpec(
+            title="领域",
+            description="领域成果",
+            order=1,
+            tasks=[TaskSpec(
+                title="原子任务",
+                description="可验证成果",
+                type="learn",
+                effort_hours=1.0,
+            )],
+        )],
+    ).model_dump()
